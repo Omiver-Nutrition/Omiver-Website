@@ -117,9 +117,9 @@
                             </div>
                         </div>
                     </div>
-                    <div class="profile-image">
+                    {% comment %} <div class="profile-image">
                         <img src="{% static 'demo/select/' %}{{name}}.png" alt="Workout">
-                    </div>
+                    </div> {% endcomment %}
                 </div>
             </div>
 
@@ -182,9 +182,11 @@
                 </div>
                 <div class="biomarker-grid">
                     {% for marker, value in biomarkers.items %}
+                    {% if marker != 'overall' %}
                     <div class="biomarker-item biomarker-card">
                         {% component "custom_slider" min='{{value.min}}' max='{{value.max}}' value='{{value.value}}' marker='{{marker}}' / %}
                     </div>
+                    {% endif %}
                     {% endfor %}
                 </div>
             </div>
@@ -268,13 +270,13 @@
 <script>
     const biomarkerData = {};
     function updatePieChart() {
-        const average = Object.values(biomarkerData).length > 0 ? Math.round(Object.values(biomarkerData).reduce((a, b) => a + b, 0) / Object.values(biomarkerData).length) : 0;
+        const average = 60;
         const pieBackground = document.getElementById('pieBackground');
         const percentageElement = document.getElementById('overallPercentage');
         
         const angle = (average / 100) * 360;
         pieBackground.style.setProperty('--percentage', `${angle}deg`);
-        percentageElement.textContent = `${23}%`;
+        percentageElement.textContent = `${64}%`;
     }
 
     // Initialize with default values
