@@ -184,7 +184,7 @@
                     {% for marker, value in biomarkers.items %}
                     {% if marker != 'overall' %}
                     <div class="biomarker-item biomarker-card">
-                        {% component "custom_slider" min='{{value.min}}' max='{{value.max}}' value='{{value.value}}' marker='{{marker}}' / %}
+                        {% component "custom_slider" low='{{value.low}}' high='{{value.high}}' min='{{value.min}}' max='{{value.max}}' value='{{value.value}}' marker='{{marker}}' / %}
                     </div>
                     {% endif %}
                     {% endfor %}
@@ -283,128 +283,129 @@
     updatePieChart();
 
     // --- 1. D3 CHART SETUP ---
-        const chartData = [
-            { date: '2025-12-01', value: 85 },
-            { date: '2025-12-05', value: 40 },
-            { date: '2025-12-10', value: 80 },
-            { date: '2025-12-15', value: 55 },
-            { date: '2025-12-20', value: 60 },
-            { date: '2025-12-25', value: 10 },
-        ];
+    const chartData = [
+        { date: '2025-12-01', value: 85 },
+        { date: '2025-12-05', value: 40 },
+        { date: '2025-12-10', value: 80 },
+        { date: '2025-12-15', value: 55 },
+        { date: '2025-12-20', value: 60 },
+        { date: '2025-12-25', value: 10 },
+    ];
+    
+    const parseDate = d3.timeParse("%Y-%m-%d");
+    const data = chartData.map(d => ({
+        date: parseDate(d.date),
+        value: d.value
+    }));
+
+    const margin = { top: 20, right: 30, bottom: 40, left: 50 };
+    const width = 700 - margin.left - margin.right;
+    const height = 350 - margin.top - margin.bottom;
+
+    const svg = d3.select("#chart")
+        .append("svg")
+        .attr("viewBox", `0 0 ${width + margin.left + margin.right} ${height + margin.top + margin.bottom}`)
+        .append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
         
-        const parseDate = d3.timeParse("%Y-%m-%d");
-        const data = chartData.map(d => ({
-            date: parseDate(d.date),
-            value: d.value
-        }));
+    const tooltip = d3.select(".tooltip");
 
-        const margin = { top: 20, right: 30, bottom: 40, left: 50 };
-        const width = 700 - margin.left - margin.right;
-        const height = 350 - margin.top - margin.bottom;
+    // --- 2. SCALES ---
+    const xScale = d3.scaleTime()
+        .domain(d3.extent(data, d => d.date))
+        .range([0, width]);
 
-        const svg = d3.select("#chart")
-            .append("svg")
-            .attr("viewBox", `0 0 ${width + margin.left + margin.right} ${height + margin.top + margin.bottom}`)
-            .append("g")
-            .attr("transform", `translate(${margin.left},${margin.top})`);
-            
-        const tooltip = d3.select(".tooltip");
+    const yScale = d3.scaleLinear()
+        .domain([0, 100]) // Domain from Low (0) to High (100)
+        .range([height, 0]);
 
-        // --- 2. SCALES ---
-        const xScale = d3.scaleTime()
-            .domain(d3.extent(data, d => d.date))
-            .range([0, width]);
+    // --- 3. AXES ---
+    const xAxis = d3.axisBottom(xScale)
+        .ticks(data.length)
+        .tickFormat(d3.timeFormat("%d-%m\n%Y"));
+        
+    svg.append("g")
+        .attr("transform", `translate(0,${height})`)
+        .call(xAxis)
+        .attr("class", "axis x-axis")
+        .selectAll("text")
+        .style("text-anchor", "middle")
+        .attr("dy", "0.5em");
+        
+    // Custom Y-axis labels instead of a traditional axis
+    const yAxisLabels = [
+        { label: "High", value: 90 },
+        { label: "Avg.", value: 50 },
+        { label: "Low", value: 10 }
+    ];
 
-        const yScale = d3.scaleLinear()
-            .domain([0, 100]) // Domain from Low (0) to High (100)
-            .range([height, 0]);
+    svg.selectAll(".y-axis-label")
+        .data(yAxisLabels)
+        .enter()
+        .append("text")
+        .attr("class", "y-axis-label")
+        .attr("x", -10)
+        .attr("y", d => yScale(d.value))
+        .attr("text-anchor", "end")
+        .attr("alignment-baseline", "middle")
+        .text(d => d.label);
 
-        // --- 3. AXES ---
-        const xAxis = d3.axisBottom(xScale)
-            .ticks(data.length)
-            .tickFormat(d3.timeFormat("%d-%m\n%Y"));
-            
-        svg.append("g")
-            .attr("transform", `translate(0,${height})`)
-            .call(xAxis)
-            .attr("class", "axis x-axis")
-            .selectAll("text")
-            .style("text-anchor", "middle")
-            .attr("dy", "0.5em");
-            
-        // Custom Y-axis labels instead of a traditional axis
-        const yAxisLabels = [
-            { label: "High", value: 90 },
-            { label: "Avg.", value: 50 },
-            { label: "Low", value: 10 }
-        ];
+    // --- 4. DRAWING THE CHART ---
+    // Area generator
+    const area = d3.area()
+        .x(d => xScale(d.date))
+        .y0(height)
+        .y1(d => yScale(d.value))
+        .curve(d3.curveMonotoneX);
 
-        svg.selectAll(".y-axis-label")
-            .data(yAxisLabels)
-            .enter()
-            .append("text")
-            .attr("class", "y-axis-label")
-            .attr("x", -10)
-            .attr("y", d => yScale(d.value))
-            .attr("text-anchor", "end")
-            .attr("alignment-baseline", "middle")
-            .text(d => d.label);
+    svg.append("path")
+        .datum(data)
+        .attr("class", "area")
+        .attr("d", area);
 
-        // --- 4. DRAWING THE CHART ---
-        // Area generator
-        const area = d3.area()
-            .x(d => xScale(d.date))
-            .y0(height)
-            .y1(d => yScale(d.value))
-            .curve(d3.curveMonotoneX);
+    // Line generator
+    const line = d3.line()
+        .x(d => xScale(d.date))
+        .y(d => yScale(d.value))
+        .curve(d3.curveMonotoneX);
 
-        svg.append("path")
-            .datum(data)
-            .attr("class", "area")
-            .attr("d", area);
+    svg.append("path")
+        .datum(data)
+        .attr("class", "line")
+        .attr("d", line);
 
-        // Line generator
-        const line = d3.line()
-            .x(d => xScale(d.date))
-            .y(d => yScale(d.value))
-            .curve(d3.curveMonotoneX);
-
-        svg.append("path")
-            .datum(data)
-            .attr("class", "line")
-            .attr("d", line);
-
-        // Data points (dots)
-        svg.selectAll(".dot")
-            .data(data)
-            .enter().append("circle")
-            .attr("class", "dot")
-            .attr("cx", d => xScale(d.date))
-            .attr("cy", d => yScale(d.value))
-            .attr("r", 6)
-            .on("mouseover", (event, d) => {
-                // Show tooltip on hover
-                tooltip.style("opacity", 1);
-                // Special case for the "High" point as in the image
-                if (d.value === 80) {
-                    tooltip.html("High");
-                } else {
-                    tooltip.html(`Value: ${d.value}`);
-                }
-            })
-            .on("mousemove", (event) => {
-                // Position the tooltip relative to the chart container
-                const [posX, posY] = d3.pointer(event, d3.select("#chart").node());
-                tooltip.style("left", `${posX}px`).style("top", `${posY}px`);
-            })
-            .on("mouseout", () => {
-                // Hide tooltip
-                tooltip.style("opacity", 0);
-            });
-
-            function openNewPage() {
-                window.open('https://forms.gle/24t8j5ymXPfJtg577', '_blank');
+    // Data points (dots)
+    svg.selectAll(".dot")
+        .data(data)
+        .enter().append("circle")
+        .attr("class", "dot")
+        .attr("cx", d => xScale(d.date))
+        .attr("cy", d => yScale(d.value))
+        .attr("r", 6)
+        .on("mouseover", (event, d) => {
+            // Show tooltip on hover
+            tooltip.style("opacity", 1);
+            // Special case for the "High" point as in the image
+            if (d.value === 80) {
+                tooltip.html("High");
+            } else {
+                tooltip.html(`Value: ${d.value}`);
             }
+        })
+        .on("mousemove", (event) => {
+            // Position the tooltip relative to the chart container
+            const [posX, posY] = d3.pointer(event, d3.select("#chart").node());
+            tooltip.style("left", `${posX}px`).style("top", `${posY}px`);
+        })
+        .on("mouseout", () => {
+            // Hide tooltip
+            tooltip.style("opacity", 0);
+        });
+
+    
+    function openNewPage() {
+        window.open('https://forms.gle/24t8j5ymXPfJtg577', '_blank');
+    }
 </script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/flickity/1.0.0/flickity.pkgd.js"></script>

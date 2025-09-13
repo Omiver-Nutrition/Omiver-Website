@@ -11,7 +11,7 @@
     <div class="absolute h-4 w-0.5 bg-gray-300" style="left: 75%;"></div>
 
     <!-- HTML Range Input -->
-    <input id="hippuric-slider" type="range" min="{{ min }}" max="{{ max }}" value="{{ value }}" disabled="true"
+    <input id="hippuric-slider" type="range" min="{{ low }}" max="{{ high }}" value="{{ value }}" disabled="true"
       class="w-full appearance-none bg-transparent relative z-10 custom-slider">
   </div>
 
@@ -21,3 +21,16 @@
     <span>{{ max }}</span>
   </div>
 </div>
+<script>
+  const slider = document.getElementById('hippuric-slider');
+  function checkSliderError() {
+    console.log(slider.min, slider.max, slider.value);
+    const min = parseFloat(slider.min);
+    const max = parseFloat(slider.max);
+    const value = parseFloat(slider.value);
+    console.log(slider.classList.value)
+    slider.classList.add("slider-error")
+    console.log(slider.classList.value)
+  }
+  checkSliderError();
+</script>
