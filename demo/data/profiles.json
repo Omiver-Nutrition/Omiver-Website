@@ -33,56 +33,78 @@
     },
     "biomarkers": {
       "Hippuric Acid": {
+        "low": 0.8,
+        "high": 32.7,
         "min": 5.6,
         "max": 27.9,
         "value": 25
       },
       "Glutamin": {
+        "low": 268,
+        "high": 732,
         "min": 334,
         "max": 666,
         "value": 700
       },
       "Lycopene": {
+        "low": 0.14,
+        "high": 1.88,
         "min": 0.3,
         "max": 1.6,
         "value": 0.7
       },
       "TMAO": {
+        "low": 34.4,
+        "high": 165.6,
         "min": 68,
         "max": 132,
         "value": 135
       },
       "Histidine": {
+        "low": 7.84,
+        "high": 17.36,
         "min": 9.8,
         "max": 15.6,
         "value": 12
       },
       "Leucine": {
+        "low": 63.2,
+        "high": 172.8,
         "min": 79,
         "max": 147,
         "value": 110
       },
       "Lactic Acid": {
+        "low": -246.4,
+        "high": 2222.4,
         "min": 118,
         "max": 1860,
         "value": 1000
       },
       "Glucose": {
+        "low": 2480,
+        "high": 6000,
         "min": 2800,
         "max": 5000,
         "value": 5103
       },
       "Carnitine": {
+        "low": 17.4,
+        "high": 62.6,
         "min": 23,
         "max": 52,
         "value": 40
       },
       "Magnesium": {
+        "low": 0.71,
+        "high": 1.09,
         "min": 0.75,
         "max": 1.03,
         "value": 0.8
       },
       "Vitamin D": {
+        "low": 0.065,
+        "high": 0.135,
         "min": 0.075,
         "max": 0.125,
         "value": 0.09
@@ -163,7 +185,7 @@
         "Snacks": "Protein smoothie with banana, spinach, and almond-free milk Rice cakes with sunflower seed butter and banana slices"
       }
     },
-    "highlight":"Your hypoxanthine levels have stabilized to average levels after 4 months. Continue to reduce purine-rich foods.",
+    "highlight": "Your hypoxanthine levels have stabilized to average levels after 4 months. Continue to reduce purine-rich foods.",
     "colour": "#D27644",
     "slug": "marcus",
     "registration_date": "06/06/2025",
@@ -207,56 +229,78 @@
     },
     "biomarkers": {
       "Hippuric Acid": {
+        "low": 0.8,
+        "high": 32.7,
         "min": 5.6,
         "max": 27.9,
         "value": 25
       },
       "Glutamin": {
+        "low": 268,
+        "high": 732,
         "min": 334,
         "max": 666,
         "value": 500
       },
       "Lycopene": {
+        "low": 0.14,
+        "high": 1.88,
         "min": 0.3,
         "max": 1.6,
         "value": 1.8
       },
       "TMAO": {
+        "low": 34.4,
+        "high": 165.6,
         "min": 68,
         "max": 132,
         "value": 57
       },
       "Histidine": {
+        "low": 7.84,
+        "high": 17.36,
         "min": 9.8,
         "max": 15.6,
         "value": 14
       },
       "Leucine": {
+        "low": 63.2,
+        "high": 172.8,
         "min": 79,
         "max": 147,
         "value": 155.4
       },
       "Lactic Acid": {
+        "low": -246.4,
+        "high": 2222.4,
         "min": 118,
         "max": 1860,
         "value": 1500
       },
       "Glucose": {
+        "low": 2480,
+        "high": 6000,
         "min": 2800,
         "max": 5000,
         "value": 4500
       },
       "Carnitine": {
+        "low": 17.4,
+        "high": 62.6,
         "min": 23,
         "max": 52,
         "value": 35
       },
       "Magnesium": {
+        "low": 0.71,
+        "high": 1.09,
         "min": 0.75,
         "max": 1.03,
         "value": 0.8
       },
       "Vitamin D": {
+        "low": 0.065,
+        "high": 0.135,
         "min": 0.075,
         "max": 0.125,
         "value": 0.21
@@ -381,56 +425,78 @@
     },
     "biomarkers": {
       "Hippuric Acid": {
+        "low": 0.8,
+        "high": 32.7,
         "min": 5.6,
         "max": 27.9,
         "value": 28.5
       },
       "Glutamin": {
+        "low": 268,
+        "high": 732,
         "min": 334,
         "max": 666,
         "value": 550
       },
       "Lycopene": {
+        "low": 0.14,
+        "high": 1.88,
         "min": 0.3,
         "max": 1.6,
         "value": 0.7
       },
       "TMAO": {
+        "low": 34.4,
+        "high": 165.6,
         "min": 68,
         "max": 132,
         "value": 110
       },
       "Histidine": {
+        "low": 7.84,
+        "high": 17.36,
         "min": 9.8,
         "max": 15.6,
         "value": 16.4
       },
       "Leucine": {
+        "low": 63.2,
+        "high": 172.8,
         "min": 79,
         "max": 147,
         "value": 120
       },
       "Lactic Acid": {
+        "low": -246.4,
+        "high": 2222.4,
         "min": 118,
         "max": 1860,
         "value": 2000.5
       },
       "Glucose": {
+        "low": 2480,
+        "high": 6000,
         "min": 2800,
         "max": 5000,
         "value": 4800
       },
       "Carnitine": {
+        "low": 17.4,
+        "high": 62.6,
         "min": 23,
         "max": 52,
         "value": 60.3
       },
       "Magnesium": {
+        "low": 0.71,
+        "high": 1.09,
         "min": 0.75,
         "max": 1.03,
         "value": 0.8
       },
       "Vitamin D": {
+        "low": 0.065,
+        "high": 0.135,
         "min": 0.075,
         "max": 0.125,
         "value": 0.09
