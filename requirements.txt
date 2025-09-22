@@ -2,9 +2,9 @@ asgiref==3.9.1
 Django==5.2.4
 djangorestframework==3.16.1
 gunicorn==21.2.0
-psycopg2-binary=2.9.10
 sqlparse==0.5.3
-django-browser-reload=1.21.0
-django-components=0.141.5
-Pillow=11.3.0
-python-dotenv=1.1.1
+psycopg2-binary==2.9.10
+django-browser-reload==1.21.0
+django-components==0.141.5
+Pillow==11.3.0
+python-dotenv==1.1.1
