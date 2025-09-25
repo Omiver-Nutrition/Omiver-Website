@@ -32,9 +32,9 @@ SECRET_KEY = 'django-insecure-7z!bv1d43a&a5*b0gdfm_&x5yywoz9sv-1#d24qdjf6mc8m!-=
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['omiver-website.onrender.com','*']
+ALLOWED_HOSTS = ['*']
 
-CSRF_TRUSTED_ORIGINS = ['https://omiver-website.onrender.com','https://*.127.0.0.1']
+CSRF_TRUSTED_ORIGINS = ['https://*.127.0.0.1']
 
 
 # Application definition
@@ -101,9 +101,11 @@ WSGI_APPLICATION = 'omiver_website.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'USER': 'omiver',
-        'PASSWORD':'password',
-        'NAME': 'omiver_website',
+        'NAME': os.getenv('DATABASE_NAME'),
+        'USER': os.getenv('DATABASE_USER'),
+        'PASSWORD': os.getenv('DATABASE_PASSWORD'),
+        'HOST': os.getenv('DATABASE_HOST'),
+        'PORT': os.getenv('DATABASE_PORT'),
     }
 }
 
