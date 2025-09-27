@@ -1,7 +1,7 @@
-http://localhost {
+https://dev.omiver.me {
     # Serve static files from staticfiles directory
     handle /static/* {
-        root * /srv/
+        root * /srv/static
         file_server
     }
 
