@@ -2,6 +2,8 @@ from rest_framework import serializers
 
 from core.models import *
 
+from django.contrib.auth.models import User
+
 
 # Move ProfileSerializer above ClientSerializer to fix NameError
 class ProfileSerializer(serializers.ModelSerializer):
@@ -13,12 +15,18 @@ class ProfileSerializer(serializers.ModelSerializer):
             "ethnicity",
             "allergies",
             "sport",
+            "health_conditions",
+            "dietary_preferences",
+            "gender",
+            "height",
+            "weight",
             "fitness_goal",
             "nutritional_goal",
         ]
 
 
 class ClientSerializer(serializers.ModelSerializer):
+    profile = ProfileSerializer()
     class Meta:
         model = Client
         fields = [
