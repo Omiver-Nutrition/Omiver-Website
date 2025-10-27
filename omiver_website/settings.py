@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django_components',
     'rest_framework',
+    'rest_framework.authtoken',
     'api',
     'profiles',
     'core',
@@ -99,18 +100,18 @@ WSGI_APPLICATION = 'omiver_website.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 DATABASES = {
-    # 'default': {
-    #     'ENGINE': 'django.db.backends.postgresql',
-    #     'NAME': os.getenv('DATABASE_NAME'),
-    #     'USER': os.getenv('DATABASE_USER'),
-    #     'PASSWORD': os.getenv('DATABASE_PASSWORD'),
-    #     'HOST': os.getenv('DATABASE_HOST'),
-    #     'PORT': os.getenv('DATABASE_PORT'),
-    # },
-    'default':{
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('DATABASE_NAME'),
+        'USER': os.getenv('DATABASE_USER'),
+        'PASSWORD': os.getenv('DATABASE_PASSWORD'),
+        'HOST': os.getenv('DATABASE_HOST'),
+        'PORT': os.getenv('DATABASE_PORT'),
+    },
+    # 'default':{
+    #     'ENGINE': 'django.db.backends.sqlite3',
+    #     'NAME': BASE_DIR / 'db.sqlite3',
+    # }
 }
 
 
@@ -164,6 +165,16 @@ STATICFILES_DIRS = [
     BASE_DIR / "demo" / "static",
     # Add more as needed
 ]
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework.authentication.TokenAuthentication',
+    ),
+    # Allow unauthenticated access to certain API views if needed; enforce auth where required
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.AllowAny',
+    ),
+}
 
 STATICFILES_FINDERS = [
     # Default finders

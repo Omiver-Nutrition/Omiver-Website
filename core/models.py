@@ -3,23 +3,54 @@ from django.utils import timezone
 from datetime import datetime, timedelta
 
 
+class Biomarker(models.Model):
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=100, unique=True, db_index=True)
+    description = models.TextField(blank=True)
+    range_min = models.FloatField()
+    range_max = models.FloatField()
+    unit = models.CharField(max_length=50)
+
+
+class BiomarkerTest(models.Model):
+    id = models.AutoField(primary_key=True)
+    client = models.ForeignKey("Client", on_delete=models.CASCADE)
+    data = models.JSONField()
+    recorded_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
 class Profile(models.Model):
     id = models.AutoField(primary_key=True)
     date_of_birth = models.DateField(null=True)
+    gender = models.CharField(max_length=10)
+    height = models.FloatField()
+    weight = models.FloatField()
     ethnicity = models.CharField(max_length=100)
-    allergies = models.TextField(blank=True)
     sport = models.CharField(max_length=100)
+    health_conditions = models.TextField(blank=True)
+    allergies = models.TextField(blank=True)
+    dietary_preferences = models.TextField(blank=True)
     fitness_goal = models.CharField(max_length=100)
     nutritional_goal = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    @staticmethod
+    def get_by_id(profile_id) -> "Profile":
+        """
+        Retrieve a Profile object by ID.
+        Returns the Profile instance if found, else None.
+        """
+        return Profile.objects.filter(id=profile_id).first()
+
 
 class Client(models.Model):
 
-    USER_TYPES = [("TRAINER", "TRAINER"), ("CLIENT", "CLIENT")]
-    # linke to auth.user
-    user = models.ForeignKey(
+    USER_TYPES = [("PROVIDER", "PROVIDER"), ("INDIVIDUAL", "INDIVIDUAL")]
+    # link to auth.user
+    user = models.OneToOneField(
         "auth.User", on_delete=models.CASCADE, null=True, blank=True
     )
 
@@ -28,13 +59,31 @@ class Client(models.Model):
     email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
-    type = models.CharField(max_length=10, choices=USER_TYPES, default="CLIENT")
-    profile = models.OneToOneField(Profile, on_delete=models.CASCADE, null=True, blank=True)
+    type = models.CharField(
+        max_length=10, choices=USER_TYPES, default="INDIVIDUAL")
+    profile = models.OneToOneField(
+        Profile, on_delete=models.CASCADE, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"<Client {self.first_name} {self.last_name} ({self.email})>"
+
+    @staticmethod
+    def get_client_by_email(email) -> "Client":
+        """
+        Retrieve a Client object by email.
+        Returns the Client instance if found, else None.
+        """
+        return Client.objects.filter(email=email).first()
+
+    @staticmethod
+    def get_client_by_id(client_id) -> "Client":
+        """
+        Retrieve a Client object by ID.
+        Returns the Client instance if found, else None.
+        """
+        return Client.objects.filter(id=client_id).first()
 
 
 class MealPlan(models.Model):
