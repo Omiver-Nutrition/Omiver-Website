@@ -19,3 +19,6 @@ def login_page(request):
         else:
             messages.error(request, "Invalid username or password")
     return render(request, "core/login.html")
+
+def register_page(request):
+    return render(request, "core/register.html")

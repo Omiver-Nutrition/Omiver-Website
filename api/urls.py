@@ -13,4 +13,6 @@ urlpatterns = [
     path("client/<int:pk>", views.client_handler, name="client_handler"),
     # account related
     path("register", views.register, name="register"),
+    path("check_username", views.check_username, name="check_username"),
+    path("login", views.login_view, name="login"),
 ]

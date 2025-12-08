@@ -10,6 +10,9 @@ class ProfileSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "date_of_birth",
+            "sex",
+            "height",
+            "weight",
             "ethnicity",
             "allergies",
             "sport",
