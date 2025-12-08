@@ -1,4 +1,4 @@
-dev.omiver.me {
+www.omiver.me {
     root * /srv/static
     file_server /static/*
 
