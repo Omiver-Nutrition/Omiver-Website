@@ -58,7 +58,10 @@ def create_client(request):
 
 @api_view(["GET"])
 def client_handler(request, pk):
-    client = Client.objects.get(id=pk)
+    try:
+        client = Client.objects.get(id=pk)
+    except Client.DoesNotExist:
+        return Response({"error": "Client not found"}, status=status.HTTP_404_NOT_FOUND)
     serializer = ClientSerializer(client)
     if client.profile:
         profile_serializer = ProfileSerializer(client.profile)

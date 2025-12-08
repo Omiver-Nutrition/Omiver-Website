@@ -1,11 +1,11 @@
 ### login
 POST http://localhost:8000/api/login http/1.1
 Content-Type: application/json
-CSRF-Token: "xxx"
+CSRF-Token: "OoPUOnVt1YyXkZLGsxh2DdBEp4a2N4Za"
 
 {
-"username": "johndoe",
-"password": "password123"
+"username": "admin",
+"password": "password"
 }
 
 ### register account
