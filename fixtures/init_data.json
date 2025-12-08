@@ -1,0 +1,112 @@
+[
+  {
+    "model": "core.biomarker",
+    "pk": 1,
+    "fields": {
+      "name": "Hippuric Acid",
+      "range_min": 5.6,
+      "range_max": 27.9,
+      "unit": "mmol"
+    }
+  },
+  {
+    "model": "core.biomarker",
+    "pk": 2,
+    "fields": {
+      "name": "Glutamin",
+      "range_min": 334,
+      "range_max": 666,
+      "unit": "mmol"
+    }
+  },
+  {
+    "model": "core.biomarker",
+    "pk": 3,
+    "fields": {
+      "name": "Lycopene",
+      "range_min": 0.3,
+      "range_max": 0.6,
+      "unit": "mmol"
+    }
+  },
+  {
+    "model": "core.biomarker",
+    "pk": 4,
+    "fields": {
+      "name": "TMAO",
+      "range_min": 68,
+      "range_max": 132,
+      "unit": "mmol"
+    }
+  },
+  {
+    "model": "core.biomarker",
+    "pk": 5,
+    "fields": {
+      "name": "Histidine",
+      "range_min": 9.8,
+      "range_max": 15.6,
+      "unit": "mmol"
+    }
+  },
+  {
+    "model": "core.biomarker",
+    "pk": 6,
+    "fields": {
+      "name": "Leucine",
+      "range_min": 79,
+      "range_max": 147,
+      "unit": "mmol"
+    }
+  },
+  {
+    "model": "core.biomarker",
+    "pk": 7,
+    "fields": {
+      "name": "Lactic Acid",
+      "range_min": 118,
+      "range_max": 1860,
+      "unit": "mmol"
+    }
+  },
+  {
+    "model": "core.biomarker",
+    "pk": 8,
+    "fields": {
+      "name": "Glucose",
+      "range_min": 2800,
+      "range_max": 5000,
+      "unit": "mmol"
+    }
+  },
+  {
+    "model": "core.biomarker",
+    "pk": 9,
+    "fields": {
+      "name": "Carnitine",
+      "range_min": 23,
+      "range_max": 52,
+      "unit": "mmol"
+    }
+  },
+  {
+    "model": "core.biomarker",
+    "pk": 10,
+    "fields": {
+      "name": "Magnesium",
+      "range_min": 0.75,
+      "range_max": 1.03,
+      "unit": "mmol"
+    }
+  },
+  {
+    "model": "core.biomarker",
+    "pk": 11,
+    "fields": {
+      "name": "Vitamin D",
+      "range_min": 0.075,
+      "range_max": 0.125,
+      "unit": "mmol"
+    }
+  }
+]
