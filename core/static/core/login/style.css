@@ -20,7 +20,7 @@
   color: white;
 
   padding: 0px 25px;
-  
+
   position: relative;
   display: flex;
   justify-content: center;
@@ -42,7 +42,7 @@
 }
 
 .section-title {
-  margin-bottom: 125px;
+  margin-bottom: 50px;
 }
 
 .logo {
@@ -64,7 +64,7 @@ form input {
   background-color: #f8f8f8;
   color: black;
 
-  padding-left: 20px; 
+  padding-left: 20px;
 }
 
 
@@ -81,4 +81,64 @@ button {
 .error-message {
   list-style-type: none;
   color: red;
+}
+
+.login-footer {
+  margin-top: 50px;
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.account-type-group {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.account-type {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+}
+
+.account-type img {
+  height: 50px;
+  width: 50px;
+  object-fit: contain;
+}
+
+.inputs * {
+  border-radius: 20px;
+  border: none;
+
+  height: 40px;
+  margin: 5px;
+  width: 400px;
+  background-color: #f8f8f8;
+  color: black;
+
+  padding-left: 20px;
+}
+
+.input-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 20px;
+  height: 300px;
+}
+
+.register_textarea {
+  border-radius: 20px;
+  border: none;
+  flex-grow: 1;
+
+  margin: 5px;
+  width: 400px;
+  background-color: #f8f8f8;
+  color: black;
+
+  padding: 20px;
+  resize: none;
 }

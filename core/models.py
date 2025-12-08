@@ -9,6 +9,7 @@ class Profile(models.Model):
     ethnicity = models.CharField(max_length=100)
     allergies = models.TextField(blank=True)
     sport = models.CharField(max_length=100)
+    health_conditions = models.TextField(blank=True)
     fitness_goal = models.CharField(max_length=100)
     nutritional_goal = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -17,7 +18,7 @@ class Profile(models.Model):
 
 class Client(models.Model):
 
-    USER_TYPES = [("TRAINER", "TRAINER"), ("CLIENT", "CLIENT")]
+    USER_TYPES = [("PROVIDER", "healthcare"), ("INDIVIDUAL", "individual")]
     # linke to auth.user
     user = models.ForeignKey(
         "auth.User", on_delete=models.CASCADE, null=True, blank=True

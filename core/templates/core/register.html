@@ -1,0 +1,260 @@
+{% extends 'demo/two_column_layout.html' %}
+{% load static %}
+{% load component_tags %}
+
+
+{% block inner_inner_styles %}
+  <link rel="stylesheet" href="{% static 'core/login/style.css' %}" />
+{% endblock %}
+
+{% block left_content %}
+  <img class="athlete-pic" src="{% static 'core/login/athlete.png' %}" alt="An athlete running into the sunset" />
+{% endblock %}
+
+
+{% block back_button_attrs %}
+  href="{% url 'welcome_default_page' %}"
+{% endblock %}
+
+{% block right_content %}
+  <p class="section-title">Create Account</p>
+  <img class="logo" src="{% static 'r.svg' %}" alt="Omiver Logo" />
+
+  <div id="register-messages"></div>
+
+  <div id="multi-step-register">
+    <!-- Step 1: Email & Password -->
+    <div class="step" data-step="1">
+      <form id="step1-form" onsubmit="return false;">
+        {% csrf_token %}
+        <span class="inputs">
+          <input type="email" id="email" placeholder="Email" required autocomplete="username" />
+          <input type="password" id="password1" placeholder="Password" required autocomplete="new-password" />
+          <input type="password" id="password2" placeholder="Confirm Password" required autocomplete="new-password" />
+        </span>
+        <div class="actions">
+          <button class="action-button login-button" id="step1-next">Register <img src="{% static 'next_arrow.svg' %}" /></button>
+          <h3 id="or-text"><span>OR</span></h3>
+        </div>
+      </form>
+    </div>
+
+    <!-- Step 2: Account type -->
+    <div class="step" data-step="2" style="display:none;">
+      <p>Please select an Account type</p>
+      <div class="account-type-group">
+          <label class="account-type">
+            <input type="radio" name="accountType" value="CLIENT" checked />
+            <img src="{% static 'client_icon.svg' %}" alt="Individual User" /> Individual User
+          </label>
+          <label class="account-type"><input type="radio" name="accountType" value="TRAINER" /> 
+            <img src="{% static 'trainer_icon.svg' %}" alt="Healthcare Provider" /> Healthcare Provider</label>
+      </div>
+      <div class="actions">
+        <button class="action-button" id="step2-back">Go Back</button>
+        <button class="action-button login-button" id="step2-next">Continue <img src="{% static 'next_arrow.svg' %}" /></button>
+      </div>
+    </div>
+
+    <!-- Step 3: Personal details -->
+    <div class="step" data-step="3" style="display:none;">
+      <span class="inputs">
+        <input type="text" id="first_name" placeholder="First name" required />
+        <input type="text" id="last_name" placeholder="Last name" required />
+        <input type="date" id="dob" placeholder="Date of birth" />
+        <select id="sex">
+          <option value="">Select sex</option>
+          <option value="M">Male</option>
+          <option value="F">Female</option>
+          <option value="O">Other</option>
+        </select>
+        <select id="ethnicity">
+          <option value="">Select ethnicity</option>
+          <option value="American Indian or Alaska Native">American Indian or Alaska Native</option>
+          <option value="Asian">Asian</option>
+          <option value="Black or African American">Black or African American</option>
+          <option value="Hispanic or Latino">Hispanic or Latino</option>
+          <option value="Middle Eastern or North African">Middle Eastern or North African</option>
+          <option value="Native Hawaiian or Other Pacific Islander">Native Hawaiian or Other Pacific Islander</option>
+          <option value="White">White</option>
+          <option value="Mixed/Multiple Ethnicities">Mixed/Multiple Ethnicities</option>
+          <option value="Other">Other</option>
+        </select>
+        <input type="number" id="height" placeholder="Height (cm)" />
+        <input type="number" id="weight" placeholder="Weight (kg)" />
+      </span>
+      <div class="actions">
+        <button class="action-button" id="step3-back">Go Back</button>
+        <button class="action-button login-button" id="step3-next">Continue <img src="{% static 'next_arrow.svg' %}" /></button>
+      </div>
+    </div>
+
+    <!-- Step 4: Health history -->
+    <div class="step" data-step="4" style="display:none;">
+      <p>Help us understand your Health history</p>
+      <div class="input-area">
+        <textarea class="register_textarea" id="health_history" placeholder="List any chronic conditions, diseases, or health concerns...(Leave blank if none apply)."></textarea>
+      </div>
+      <div class="actions">
+        <button class="action-button" id="step4-back">Go Back</button>
+        <button class="action-button login-button" id="step4-next">Continue <img src="{% static 'next_arrow.svg' %}" /></button>
+      </div>
+    </div>
+
+    <!-- Step 5: Allergies & dietary preference -->
+    <div class="step" data-step="5" style="display:none;">
+      <p>Allergies and dietary preference</p>
+      <div class="input-area">
+        <textarea class="register_textarea" id="allergies" placeholder="List any allergies & Sensitivities"></textarea>
+        <textarea class="register_textarea" id="dietary_pref" placeholder="Dietary preference (e.g. vegetarian)"></textarea>
+      </div>
+      <div class="actions">
+        <button class="action-button" id="step5-back">Go Back</button>
+        <button class="action-button login-button" id="step5-next">Continue <img src="{% static 'next_arrow.svg' %}" /></button>
+      </div>
+    </div>
+
+    <!-- Step 6: Nutrition & Fitness goals -->
+    <div class="step" data-step="6" style="display:none;">
+      <p>Nutrition and fitness goals</p>
+      <div class="input-area">
+        <textarea class="register_textarea" id="nutrition_goal" placeholder="Nutrition goal..."></textarea>
+        <textarea class="register_textarea" id="fitness_goal" placeholder="Fitness goal..."></textarea>
+      </div>
+      <div class="actions">
+        <button class="action-button" id="step6-back">Go Back</button>
+        <button class="action-button login-button" id="step6-finish">Finish <img src="{% static 'next_arrow.svg' %}" /></button>
+      </div>
+    </div>
+  </div>
+
+  <a class="action-button" href="{% url 'login_page' %}">Back to Login <img src="{% static 'next_arrow.svg' %}" /></a>
+
+  {% component "demo_modal" / %}
+
+  <script>
+    // Helper to get CSRF token from cookies
+    function getCookie(name) {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return parts.pop().split(';').shift();
+    }
+
+    const state = { step: 1 };
+
+    function showStep(n) {
+      document.querySelectorAll('#multi-step-register .step').forEach(el => el.style.display = 'none');
+      const el = document.querySelector(`#multi-step-register .step[data-step='${n}']`);
+      if (el) el.style.display = '';
+      state.step = n;
+      window.scrollTo(0,0);
+    }
+
+    function showMessage(msg, isError=true) {
+      const box = document.getElementById('register-messages');
+      box.innerHTML = `<div class="error-message">${msg}</div>`;
+      if (!isError) box.querySelector('.error-message').style.background = '#e6ffed';
+    }
+
+    // Step navigation handlers
+    document.getElementById('step1-next').addEventListener('click', async () => {
+      const validateEmail = (email) => {
+        return email.match(/^(([^<>()[\]\\.,;:\s@\"]+(\.[^<>()[\]\\.,;:\s@\"]+)*)|(\".+\"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/);
+      };
+      const email = document.getElementById('email').value.trim();
+      const p1 = document.getElementById('password1').value;
+      const p2 = document.getElementById('password2').value;
+      if (!validateEmail(email) || !p1 || !p2) { showMessage('Please fill email and passwords.'); return; }
+      if (p1 !== p2) { showMessage('Passwords do not match.'); return; }
+
+      // check username availability
+      try {
+        const res = await fetch(`/api/check_username?username=${encodeURIComponent(email)}`);
+        const json = await res.json();
+        if (json.exists) { showMessage('Email is already registered. Please login or use another email.'); return; }
+        // proceed
+        showStep(2);
+        document.getElementById('register-messages').innerHTML = '';
+      } catch (err) {
+        showMessage('Error checking email availability. Try again.');
+      }
+    });
+
+    document.getElementById('step2-back').addEventListener('click', () => showStep(1));
+    document.getElementById('step2-next').addEventListener('click', () => showStep(3));
+    document.getElementById('step3-back').addEventListener('click', () => showStep(2));
+    document.getElementById('step3-next').addEventListener('click', () => showStep(4));
+    document.getElementById('step4-back').addEventListener('click', () => showStep(3));
+    document.getElementById('step4-next').addEventListener('click', () => showStep(5));
+    document.getElementById('step5-back').addEventListener('click', () => showStep(4));
+    document.getElementById('step5-next').addEventListener('click', () => showStep(6));
+    document.getElementById('step6-back').addEventListener('click', () => showStep(5));
+
+    async function finishRegistration() {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password1').value;
+      const accountType = document.querySelector('input[name="accountType"]:checked').value;
+      const first_name = document.getElementById('first_name').value.trim();
+      const last_name = document.getElementById('last_name').value.trim();
+      const dob = document.getElementById('dob').value || null;
+      const sex = document.getElementById('sex').value || '';
+      const ethnicity = document.getElementById('ethnicity') ? document.getElementById('ethnicity').value || '' : '';
+      const height = document.getElementById('height').value || '';
+      const weight = document.getElementById('weight').value || '';
+      const health_history = document.getElementById('health_history').value || '';
+      const allergies = document.getElementById('allergies').value || '';
+      const dietary_pref = document.getElementById('dietary_pref').value || '';
+      const nutrition_goal = document.getElementById('nutrition_goal').value || '';
+      const fitness_goal = document.getElementById('fitness_goal').value || '';
+
+      // Build payload matching API expectations.
+      // Note: profile model doesn't have `sex`/`height`/`weight` fields, so we map them into available fields.
+      const payload = {
+        username: email,
+        password: password,
+        email: email,
+        first_name: first_name,
+        last_name: last_name,
+        type: accountType,
+        profile: {
+          date_of_birth: dob,
+          sex: sex,
+          ethnicity: ethnicity,
+          allergies: allergies,
+          sport: `${height ? height + 'cm' : ''} ${weight ? weight + 'kg' : ''}`,
+          fitness_goal: fitness_goal,
+          nutritional_goal: `${dietary_pref}${nutrition_goal ? '\n' + nutrition_goal : ''}`
+        }
+      };
+
+      try {
+        const csrftoken = getCookie('csrftoken');
+        const res = await fetch('/api/register', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+          },
+          body: JSON.stringify(payload),
+          credentials: 'same-origin'
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          showMessage(json.error || JSON.stringify(json));
+          return;
+        }
+        // success
+        showMessage('Registration successful — redirecting...', false);
+        setTimeout(() => { window.location.href = '/login'; }, 1200);
+      } catch (err) {
+        showMessage('Registration failed. Try again.');
+      }
+    }
+
+    document.getElementById('step6-finish').addEventListener('click', finishRegistration);
+
+    // initialize
+    showStep(1);
+  </script>
+
+{% endblock %}

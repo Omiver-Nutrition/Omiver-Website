@@ -1,4 +1,14 @@
-## regsiter account
+### login
+POST http://localhost:8000/api/login http/1.1
+Content-Type: application/json
+CSRF-Token: "xxx"
+
+{
+"username": "johndoe",
+"password": "password123"
+}
+
+### register account
 POST http://localhost:8000/api/register http/1.1
 Content-Type: application/json
 
@@ -8,7 +18,7 @@ Content-Type: application/json
     "first_name": "John",
     "last_name": "Doe",
     "email": "john.doe@email.com",
-    "type": "CLIENT",
+    "type": "INDIVIDUAL",
     "profile":{
         "ethnicity":"Black",
         "allergies":"None",

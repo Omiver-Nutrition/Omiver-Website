@@ -1,14 +1,14 @@
 from django.utils.dateparse import parse_datetime
 from django.http import HttpResponse
+from django.contrib.auth import authenticate, login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
-from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.response import Response
 from rest_framework.decorators import api_view
 
 from .serializer import ClientSerializer, MealPlanSerializer, ProfileSerializer
 from core.models import MealPlan, Client, Profile
-
 
 # Create your views here.
 def index(request):
@@ -95,7 +95,6 @@ def create_profile(data):
     profile_serializer.save()
     return profile_serializer, None
 
-
 @api_view(["POST"])
 def register(request):
     data = request.data
@@ -123,6 +122,41 @@ def register(request):
         {"message": "User registered successfully"}, status=status.HTTP_201_CREATED
     )
 
+
+@api_view(["GET"])
+def check_username(request):
+    """Check if a username (email) already exists.
+
+    Query param: ?username=someone@example.com
+    Returns: { "exists": true/false }
+    """
+    username = request.GET.get("username")
+    if not username:
+        return Response({"error": "username query param required"}, status=status.HTTP_400_BAD_REQUEST)
+    exists = User.objects.filter(username=username).exists()
+    return Response({"exists": exists}, status=status.HTTP_200_OK)
+
+@api_view(["POST"])
+def login_view(request):
+    print(request.data)
+    username = request.data.get("username")
+    password = request.data.get("password")
+    if not username or not password:
+        return Response(
+            {"error": "Username and password are required"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    
+
+    user = authenticate(request, username=username, password=password)
+    if user is not None:
+        login(request, user)
+        return Response({"message": "Login successful"}, status=status.HTTP_200_OK)
+    else:
+        return Response(
+            {"error": "Invalid username or password"},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
 
 @login_required
 @api_view(["GET"])
