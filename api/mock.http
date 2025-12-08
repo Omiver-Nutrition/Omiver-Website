@@ -20,12 +20,27 @@ Content-Type: application/json
     "email": "john.doe@email.com",
     "type": "INDIVIDUAL",
     "profile":{
+        "date_of_birth":"1990-01-01",
+        "gender":"male",
+        "height":180,
+        "weight":75,
         "ethnicity":"Black",
+        "sport":"running",
+        "health_conditions":"None",
         "allergies":"None",
-        "sport":"balls",
+        "dietary_preferences":"Vegetarian",
         "fitness_goal":"my goal 1",
         "nutritional_goal":"goal 2"
     }
+}
+
+### login
+POST http://localhost:8000/api/login http/1.1
+Content-Type: application/json
+
+{
+    "username": "johndoe",
+    "password": "password123"
 }
 
 ### create client

@@ -2,10 +2,12 @@ from django.utils.dateparse import parse_datetime
 from django.http import HttpResponse
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth import authenticate, login
 from django.contrib.auth.models import User
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
+from rest_framework.authtoken.models import Token
 
 from .serializer import ClientSerializer, MealPlanSerializer, ProfileSerializer
 from core.models import MealPlan, Client, Profile
@@ -21,12 +23,11 @@ def create_client(request):
     client_data = request.data
     profile_data = client_data.pop("profile", None)
 
-    client_instance = Client.objects.filter(email=client_data.get("email")).first()
+    client_instance = Client.get_client_by_email(client_data.get("email"))
     # if client exists, continue to the profile creation
     if client_instance:
         client_serializer = ClientSerializer(
-            client_instance, data=client_data, partial=True
-        )
+            client_instance, data=client_data, partial=True)
     else:
         client_serializer = ClientSerializer(data=client_data)
     if not client_serializer.is_valid():
@@ -38,25 +39,19 @@ def create_client(request):
         profile_data = profile_data.copy()
         if client_instance and client_instance.profile:
             profile_serializer = ProfileSerializer(
-                client_instance.profile, data=profile_data, partial=True
-            )
+                client_instance.profile, data=profile_data, partial=True)
         else:
             profile_serializer = ProfileSerializer(data=profile_data)
         if not profile_serializer.is_valid():
-            return Response(
-                profile_serializer.errors, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response(profile_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         profile_serializer.save()
         client = client_serializer.data.copy()
         client["profile"] = profile_serializer.data.get("id")
         # save to client
         client_serializer = ClientSerializer(
-            client_serializer.instance, client, partial=True
-        )
+            client_serializer.instance, client, partial=True)
         if not client_serializer.is_valid():
-            return Response(
-                client_serializer.errors, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response(client_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         client_serializer.save()
     return Response(client_serializer.data, status=status.HTTP_201_CREATED)
 
@@ -81,14 +76,16 @@ def register_user(username, password):
     user = User.objects.create_user(username=username, password=password)
     return user, None
 
-def create_client(data):
+
+def create_client_helper(data):
     client_serializer = ClientSerializer(data=data)
     if not client_serializer.is_valid():
         return None, client_serializer.errors
     client_serializer.save()
     return client_serializer, None
 
-def create_profile(data):
+
+def create_profile_helper(data):
     profile_serializer = ProfileSerializer(data=data)
     if not profile_serializer.is_valid():
         return None, profile_serializer.errors
@@ -100,27 +97,50 @@ def register(request):
     data = request.data
     username = data.pop("username", None)
     password = data.pop("password", None)
-    
+
     user, error = register_user(username, password)
     if error:
         return Response({"error": error}, status=status.HTTP_400_BAD_REQUEST)
 
     data["user"] = user.id
     profile = data.pop("profile", None)
-    
-    client_serializer, error = create_client(data)
+
+    client_serializer, error = create_client_helper(data)
     if error:
         user.delete()
         return Response(error, status=status.HTTP_400_BAD_REQUEST)
-    client_serializer.instance
     if profile:
-        profile_serializer, error = create_profile(profile)
+        profile_serializer, error = create_profile_helper(profile)
         if error:
             user.delete()
             return Response(error, status=status.HTTP_400_BAD_REQUEST)
-    return Response(
-        {"message": "User registered successfully"}, status=status.HTTP_201_CREATED
-    )
+        client_serializer.update(client_serializer.instance, {
+                                 "profile": profile_serializer.instance})
+    return Response(client_serializer.data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["POST"])
+def login_view(request):
+    # Allow clients that cannot use CSRF/session auth to POST credentials
+    # TokenAuthentication will be used for subsequent requests
+    data = request.data
+    username = data.get("username")
+    password = data.get("password")
+    user = authenticate(username=username, password=password)
+    if user is not None:
+        # create or retrieve token
+        # token, _ = Token.objects.get_or_create(user=user)
+        # Optionally still create a session for web clients
+        login(request, user)
+        try:
+            client = Client.objects.get(user=user)
+            print(client.profile.height)
+            request.session["client_id"] = client.id
+        except Exception:
+            # not required for token-based clients
+            pass
+        return Response(ClientSerializer(client).data, status=status.HTTP_200_OK)
+    return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
 
 
 @api_view(["GET"])
@@ -158,6 +178,7 @@ def login_view(request):
             status=status.HTTP_401_UNAUTHORIZED,
         )
 
+
 @login_required
 @api_view(["GET"])
 def generate_mealPlan(request, client_id):
@@ -184,7 +205,8 @@ def meal_plan(request):
     # Optionally parse start_date and end_date if provided
     start_dt = parse_datetime(start_date) if start_date else None
     end_dt = parse_datetime(end_date) if end_date else None
-    meal_plans = MealPlan.get_meal_plans_by_client_and_date(client_id, start_dt, end_dt)
+    meal_plans = MealPlan.get_meal_plans_by_client_and_date(
+        client_id, start_dt, end_dt)
     # Serialize meal plans
     meal_plan_list = [
         {
