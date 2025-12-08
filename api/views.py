@@ -137,12 +137,11 @@ def login_view(request):
         login(request, user)
         try:
             client = Client.objects.get(user=user)
-            print(client.profile.height)
             request.session["client_id"] = client.id
+            return Response(ClientSerializer(client).data, status=status.HTTP_200_OK)
         except Exception:
             # not required for token-based clients
             pass
-        return Response(ClientSerializer(client).data, status=status.HTTP_200_OK)
     return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
 
 

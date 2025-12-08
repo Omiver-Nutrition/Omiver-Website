@@ -8,3 +8,4 @@ django-browser-reload==1.21.0
 django-components==0.141.5
 Pillow==11.3.0
 python-dotenv==1.1.1
+corsheaders
