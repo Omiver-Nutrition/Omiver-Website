@@ -1,12 +1,5 @@
-### login
-POST http://localhost:8000/api/login http/1.1
-Content-Type: application/json
-CSRF-Token: "OoPUOnVt1YyXkZLGsxh2DdBEp4a2N4Za"
-
-{
-"username": "admin",
-"password": "password"
-}
+### check username
+GET http://localhost:8000/api/check_username?username=johndoe http/1.1
 
 ### register account
 POST http://localhost:8000/api/register http/1.1
@@ -19,19 +12,17 @@ Content-Type: application/json
     "last_name": "Doe",
     "email": "john.doe@email.com",
     "type": "INDIVIDUAL",
-    "profile":{
-        "date_of_birth":"1990-01-01",
-        "gender":"male",
-        "height":180,
-        "weight":75,
-        "ethnicity":"Black",
-        "sport":"running",
-        "health_conditions":"None",
-        "allergies":"None",
-        "dietary_preferences":"Vegetarian",
-        "fitness_goal":"my goal 1",
-        "nutritional_goal":"goal 2"
-    }
+    "date_of_birth":"1990-01-01",
+    "gender":"Male",
+    "height":180,
+    "weight":75,
+    "ethnicity":"Asian",
+    "allergies":"None",
+    "sport":"running",
+    "health_conditions":"None",
+    "dietary_preferences":"Vegetarian",
+    "fitness_goal":"my goal 1",
+    "nutritional_goal":"goal 2"
 }
 
 ### login
@@ -51,17 +42,15 @@ Content-Type: application/json
     "first_name": "John",
     "last_name": "Doe",
     "email": "john.doe@email.com",
-    "type": "CLIENT",
-    "profile":{
-        "ethnicity":"Black",
-        "allergies":"None",
-        "sport":"balls",
-        "fitness_goal":"my goal 1",
-        "nutritional_goal":"goal 2"
-    }
+    "type": "INDIVIDUAL",
+    "ethnicity":"Black",
+    "allergies":"None",
+    "sport":"balls",
+    "fitness_goal":"my goal 1",
+    "nutritional_goal":"goal 2"
 }
 ### user info
-GET http://localhost:8000/api/client/1 http/1.1
+GET http://localhost:8000/api/client/2 http/1.1
 
 ### meal plan
 GET http://localhost:8000/api/mealPlan?client_id=2 http/1.1

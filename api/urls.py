@@ -3,16 +3,18 @@ from . import views
 
 urlpatterns = [
     path("", views.index, name="index"),
+    # meal plan api
     path("mealPlan", views.meal_plan, name="meal_plan"),
     path(
         "mealPlan/generate/<int:client_id>",
         views.generate_mealPlan,
         name="generate_mealPlan",
     ),
+    # client api
     path("client", views.create_client, name="create_client"),
     path("client/<int:pk>", views.client_handler, name="client_handler"),
-    # account related
+    # account api
     path("register", views.register, name="register"),
     path("check_username", views.check_username, name="check_username"),
-    path("login", views.login_view, name="login"),
+    path("login", views.login_handler, name="login"),
 ]
