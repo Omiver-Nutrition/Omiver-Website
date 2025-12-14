@@ -21,48 +21,27 @@ class BiomarkerTest(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
 
-class Profile(models.Model):
-    id = models.AutoField(primary_key=True)
-    date_of_birth = models.DateField(null=True)
-    gender = models.CharField(max_length=10)
-    height = models.FloatField()
-    weight = models.FloatField()
-    ethnicity = models.CharField(max_length=100)
-    sport = models.CharField(max_length=100)
-    health_conditions = models.TextField(blank=True)
-    allergies = models.TextField(blank=True)
-    dietary_preferences = models.TextField(blank=True)
-    fitness_goal = models.CharField(max_length=100)
-    nutritional_goal = models.TextField(blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    @staticmethod
-    def get_by_id(profile_id) -> "Profile":
-        """
-        Retrieve a Profile object by ID.
-        Returns the Profile instance if found, else None.
-        """
-        return Profile.objects.filter(id=profile_id).first()
-
-
 class Client(models.Model):
-
     USER_TYPES = [("PROVIDER", "healthcare"), ("INDIVIDUAL", "individual")]
     # linke to auth.user
-    user = models.ForeignKey(
-        "auth.User", on_delete=models.CASCADE, null=True, blank=True
-    )
-
+    user = models.OneToOneField("auth.User", on_delete=models.CASCADE, blank=True, null=True)
     # extra field
     id = models.AutoField(primary_key=True)
     email = models.EmailField(unique=True)
-    first_name = models.CharField(max_length=100)
-    last_name = models.CharField(max_length=100)
-    type = models.CharField(
-        max_length=10, choices=USER_TYPES, default="INDIVIDUAL")
-    profile = models.OneToOneField(
-        Profile, on_delete=models.CASCADE, null=True, blank=True)
+    first_name = models.CharField(max_length=100, blank=True)
+    last_name = models.CharField(max_length=100, blank=True)
+    type = models.CharField(max_length=10, choices=USER_TYPES, default="INDIVIDUAL")
+    date_of_birth = models.DateField(blank=True, null=True)
+    gender = models.CharField(max_length=10, blank=True)
+    height = models.FloatField(blank=True, null=True)
+    weight = models.FloatField(blank=True, null=True)
+    ethnicity = models.CharField(max_length=100, blank=True)
+    sport = models.CharField(max_length=100, blank=True)
+    health_conditions = models.TextField(max_length=100, blank=True)
+    dietary_preferences = models.TextField(max_length=100, blank=True)
+    allergies = models.TextField(max_length=100, blank=True)
+    fitness_goal = models.CharField(max_length=100, blank=True)
+    nutritional_goal = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

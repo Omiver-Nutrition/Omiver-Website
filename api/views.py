@@ -9,51 +9,30 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from rest_framework.authtoken.models import Token
 
-from .serializer import ClientSerializer, MealPlanSerializer, ProfileSerializer
-from core.models import MealPlan, Client, Profile
+from .serializer import ClientSerializer, MealPlanSerializer
+from core.models import MealPlan, Client
+
 
 # Create your views here.
 def index(request):
     return HttpResponse("Welcome to the API endpoint!")
 
 
+@login_required
 @api_view(["POST"])
 def create_client(request):
     # extract profile data if present
     client_data = request.data
-    profile_data = client_data.pop("profile", None)
-
-    client_instance = Client.get_client_by_email(client_data.get("email"))
+    instance = Client.get_client_by_email(client_data.get("email"))
     # if client exists, continue to the profile creation
-    if client_instance:
-        client_serializer = ClientSerializer(
-            client_instance, data=client_data, partial=True)
+    if instance:
+        serializer = ClientSerializer(instance, data=client_data, partial=True)
     else:
-        client_serializer = ClientSerializer(data=client_data)
-    if not client_serializer.is_valid():
-        return Response(client_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    client_serializer.save()
-    # create profile for client
-    if profile_data:
-        profile_data = profile_data.copy()
-        if client_instance and client_instance.profile:
-            profile_serializer = ProfileSerializer(
-                client_instance.profile, data=profile_data, partial=True)
-        else:
-            profile_serializer = ProfileSerializer(data=profile_data)
-        if not profile_serializer.is_valid():
-            return Response(profile_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        profile_serializer.save()
-        client = client_serializer.data.copy()
-        client["profile"] = profile_serializer.data.get("id")
-        # save to client
-        client_serializer = ClientSerializer(
-            client_serializer.instance, client, partial=True)
-        if not client_serializer.is_valid():
-            return Response(client_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        client_serializer.save()
-    return Response(client_serializer.data, status=status.HTTP_201_CREATED)
+        serializer = ClientSerializer(data=client_data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status.HTTP_400_BAD_REQUEST)
+    serializer.save()
+    return Response(serializer.data, status.HTTP_201_CREATED)
 
 
 @api_view(["GET"])
@@ -61,13 +40,8 @@ def client_handler(request, pk):
     try:
         client = Client.objects.get(id=pk)
     except Client.DoesNotExist:
-        return Response({"error": "Client not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"error": "Client not found"}, status.HTTP_404_NOT_FOUND)
     serializer = ClientSerializer(client)
-    if client.profile:
-        profile_serializer = ProfileSerializer(client.profile)
-        data = serializer.data
-        data["profile"] = profile_serializer.data
-        return Response(data)
     return Response(serializer.data)
 
 
@@ -88,61 +62,63 @@ def create_client_helper(data):
     return client_serializer, None
 
 
-def create_profile_helper(data):
-    profile_serializer = ProfileSerializer(data=data)
-    if not profile_serializer.is_valid():
-        return None, profile_serializer.errors
-    profile_serializer.save()
-    return profile_serializer, None
-
 @api_view(["POST"])
 def register(request):
+    """register user
+
+    example:
+    {
+        "username": "johndoe",
+        "password": "password123",
+        "first_name": "John",
+        "last_name": "Doe",
+        "email": "john.doe@email.com",
+        "type": "INDIVIDUAL",
+        "date_of_birth":"1990-01-01",
+        "gender":"Male",
+        "height":180,
+        "weight":75,
+        "ethnicity":"Asian",
+        "allergies":"None",
+        "sport":"running",
+        "health_conditions":"None",
+        "dietary_preferences":"Vegetarian",
+        "fitness_goal":"my goal 1",
+        "nutritional_goal":"goal 2"
+    }
+    """
     data = request.data
     username = data.pop("username", None)
     password = data.pop("password", None)
 
     user, error = register_user(username, password)
     if error:
-        return Response({"error": error}, status=status.HTTP_400_BAD_REQUEST)
-
+        return Response(error, status.HTTP_400_BAD_REQUEST)
     data["user"] = user.id
-    profile = data.pop("profile", None)
 
     client_serializer, error = create_client_helper(data)
     if error:
         user.delete()
-        return Response(error, status=status.HTTP_400_BAD_REQUEST)
-    if profile:
-        profile_serializer, error = create_profile_helper(profile)
-        if error:
-            user.delete()
-            return Response(error, status=status.HTTP_400_BAD_REQUEST)
-        client_serializer.update(client_serializer.instance, {
-                                 "profile": profile_serializer.instance})
-    return Response(client_serializer.data, status=status.HTTP_201_CREATED)
+        return Response(error, status.HTTP_400_BAD_REQUEST)
+    return Response(client_serializer.data, status.HTTP_201_CREATED)
 
 
 @api_view(["POST"])
-def login_view(request):
-    # Allow clients that cannot use CSRF/session auth to POST credentials
-    # TokenAuthentication will be used for subsequent requests
+def login_handler(request):
     data = request.data
-    username = data.get("username")
-    password = data.get("password")
-    user = authenticate(username=username, password=password)
-    if user is not None:
-        # create or retrieve token
-        # token, _ = Token.objects.get_or_create(user=user)
-        # Optionally still create a session for web clients
-        login(request, user)
-        try:
-            client = Client.objects.get(user=user)
-            request.session["client_id"] = client.id
-            return Response(ClientSerializer(client).data, status=status.HTTP_200_OK)
-        except Exception:
-            # not required for token-based clients
-            pass
-    return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
+    user = authenticate(**data)
+    if user is None:
+        return Response({"error": "invalid credential"}, status.HTTP_401_UNAUTHORIZED)
+
+    login(request, user)
+    try:
+        client = Client.objects.get(user=user)
+        client_serializer = ClientSerializer(client)
+        request.session["client_id"] = client.id
+        return Response(client_serializer.data, status.HTTP_200_OK)
+    except Exception as e:
+        print(e)
+        return Response({"error": e}, status.HTTP_404_NOT_FOUND)
 
 
 @api_view(["GET"])
@@ -154,40 +130,19 @@ def check_username(request):
     """
     username = request.GET.get("username")
     if not username:
-        return Response({"error": "username query param required"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"error": "username query param required"},
+            status.HTTP_400_BAD_REQUEST,
+        )
     exists = User.objects.filter(username=username).exists()
-    return Response({"exists": exists}, status=status.HTTP_200_OK)
-
-@api_view(["POST"])
-def login_view(request):
-    print(request.data)
-    username = request.data.get("username")
-    password = request.data.get("password")
-    if not username or not password:
-        return Response(
-            {"error": "Username and password are required"},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-    
-
-    user = authenticate(request, username=username, password=password)
-    if user is not None:
-        login(request, user)
-        return Response({"message": "Login successful"}, status=status.HTTP_200_OK)
-    else:
-        return Response(
-            {"error": "Invalid username or password"},
-            status=status.HTTP_401_UNAUTHORIZED,
-        )
+    return Response({"exists": exists}, status.HTTP_200_OK)
 
 
 @login_required
 @api_view(["GET"])
 def generate_mealPlan(request, client_id):
     client = Client.objects.get(id=client_id)
-    return Response(
-        {"message": f"will send client info: {client}"}, status=status.HTTP_200_OK
-    )
+    return Response({"message": f"will send client info: {client}"}, status.HTTP_200_OK)
 
 
 @api_view(["GET"])
@@ -201,14 +156,11 @@ def meal_plan(request):
     start_date = request.GET.get("start_date")
     end_date = request.GET.get("end_date")
     if not client_id:
-        return Response(
-            {"error": "client_id is required"}, status=status.HTTP_400_BAD_REQUEST
-        )
+        return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
     # Optionally parse start_date and end_date if provided
     start_dt = parse_datetime(start_date) if start_date else None
     end_dt = parse_datetime(end_date) if end_date else None
-    meal_plans = MealPlan.get_meal_plans_by_client_and_date(
-        client_id, start_dt, end_dt)
+    meal_plans = MealPlan.get_meal_plans_by_client_and_date(client_id, start_dt, end_dt)
     # Serialize meal plans
     meal_plan_list = [
         {
@@ -223,3 +175,7 @@ def meal_plan(request):
     ]
     meal_plan = MealPlanSerializer(meal_plan_list, many=True)
     return Response(meal_plan.data)
+
+def generate_mealPlan(request, client_id):
+    client = Client.objects.get(id=client_id)
+    return Response({"message": f"will send client info: {client}"}, status.HTTP_200_OK)
