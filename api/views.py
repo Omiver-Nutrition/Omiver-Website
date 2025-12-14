@@ -112,6 +112,7 @@ def login_handler(request):
 
     login(request, user)
     try:
+        user = User.objects.get(username=user.username)
         client = Client.objects.get(user=user)
         client_serializer = ClientSerializer(client)
         request.session["client_id"] = client.id
