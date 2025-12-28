@@ -1,5 +1,5 @@
-### check username
-GET http://localhost:8000/api/check_username?username=johndoe http/1.1
+### check email
+GET http://localhost:8000/api/check_email?email=john.doe@email.com http/1.1
 
 ### register account
 POST http://localhost:8000/api/register http/1.1

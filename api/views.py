@@ -123,19 +123,19 @@ def login_handler(request):
 
 
 @api_view(["GET"])
-def check_username(request):
+def check_email(request):
     """Check if a username (email) already exists.
 
-    Query param: ?username=someone@example.com
+    Query param: ?email=someone@example.com
     Returns: { "exists": true/false }
     """
-    username = request.GET.get("username")
-    if not username:
+    email = request.GET.get("email")
+    if not email:
         return Response(
-            {"error": "username query param required"},
+            {"error": "email query param required"},
             status.HTTP_400_BAD_REQUEST,
         )
-    exists = User.objects.filter(username=username).exists()
+    exists = User.objects.filter(username=email).exists()
     return Response({"exists": exists}, status.HTTP_200_OK)
 
 
