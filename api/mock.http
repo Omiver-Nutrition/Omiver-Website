@@ -6,11 +6,11 @@ POST http://localhost:8000/api/register http/1.1
 Content-Type: application/json
 
 {
-    "username": "johndoe",
+    "username": "john.doe@email.com",
+    "email": "john.doe@email.com",
     "password": "password123",
     "first_name": "John",
     "last_name": "Doe",
-    "email": "john.doe@email.com",
     "type": "INDIVIDUAL",
     "date_of_birth":"1990-01-01",
     "gender":"Male",
@@ -30,7 +30,7 @@ POST http://localhost:8000/api/login http/1.1
 Content-Type: application/json
 
 {
-    "username": "johndoe",
+    "username": "john.doe@email.com",
     "password": "password123"
 }
 
