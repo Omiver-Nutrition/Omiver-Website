@@ -15,6 +15,6 @@ urlpatterns = [
     path("client/<int:pk>", views.client_handler, name="client_handler"),
     # account api
     path("register", views.register, name="register"),
-    path("check_username", views.check_username, name="check_username"),
+    path("check_email", views.check_email, name="check_email"),
     path("login", views.login_handler, name="login"),
 ]
