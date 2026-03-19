@@ -17,8 +17,7 @@
 .hero-header {
   padding: 0px 40px;
   text-align: center;
-  margin: 20px;
-  font-size: 107px;
+  font-size: 64px;
   margin-bottom: 20px;
 }
 
@@ -118,7 +117,7 @@
 
 .section-header {
   font-weight: Medium;
-  font-size: 70px;
+  font-size: 64px;
 }
 
 .what-box {

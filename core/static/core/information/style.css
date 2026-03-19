@@ -6,7 +6,7 @@
 
     align-items: center;
     margin: 10px 0px;
-    padding: 40px 100px;
+    padding: 30px 100px;
 }
 
 .section-title {
@@ -16,7 +16,7 @@
 .section-description {
     text-align: center;
     width: 70vw;
-    margin-bottom: 50px;
+    margin-bottom: 20px;
     font-size: 40px;
 }
 
@@ -49,7 +49,7 @@
 }
 
 .our-service-box .tile {
-    min-height: 550px;
+    min-height: 350px;
 }
 
 .tiles {
@@ -266,16 +266,17 @@
     color: white;
     display: flex;
     align-items: center;
+    width: fit-content;
 
-    margin: 30px;
+    font-size: 22px;
+    margin: 10px;
     padding: 5px;
     padding-left: 10px;
     border-radius: 50px;
-    width: fit-content;
 }
 
 .contact-us-link img {
-    width: 30px;
+    width: 50px;
     margin-left: 5px;
 }
 
@@ -286,7 +287,7 @@
     text-align: center;
     border-radius: 15px;
 
-    margin: 0px 100px;
+    margin: 0px 30px;
     padding-bottom: 0px;
 }
 
@@ -303,28 +304,11 @@
     width: 100%;
 }
 
-.our-platform-box a {
-    background-color: #a8879d;
-    color: white;
-
-    display: flex;
-    align-items: center;
-
-    margin: 30px;
-    padding: 5px;
-    padding-left: 10px;
-    border-radius: 50px;
-}
-
-.our-platform-box a img {
-    width: 30px;
-    margin-left: 5px;
-}
 
 /* Section 5 - Contact Us */
 
 .contact-us-block {
-    margin-top: 100px;
+    margin-top: 30px;
     padding: 0px 100px;
 }
 

@@ -28,7 +28,7 @@
       <form id="step1-form" onsubmit="return false;">
         {% csrf_token %}
         <span class="inputs">
-          <input type="email" id="email" placeholder="Email" required autocomplete="username" />
+          <input type="email" id="email" placeholder="Email" required autocomplete="email" />
           <input type="password" id="password1" placeholder="Password" required autocomplete="new-password" />
           <input type="password" id="password2" placeholder="Confirm Password" required autocomplete="new-password" />
         </span>
@@ -169,7 +169,7 @@
 
       // check username availability
       try {
-        const res = await fetch(`/api/check_username?username=${encodeURIComponent(email)}`);
+        const res = await fetch(`/api/check_email?email=${encodeURIComponent(email)}`);
         const json = await res.json();
         if (json.exists) { showMessage('Email is already registered. Please login or use another email.'); return; }
         // proceed
