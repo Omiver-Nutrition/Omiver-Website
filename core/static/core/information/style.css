@@ -48,10 +48,6 @@
     flex-direction: column;
 }
 
-.our-service-box .tile {
-    min-height: 500px;
-}
-
 .tiles {
     display: flex;
     flex-wrap: wrap;
@@ -73,6 +69,8 @@
     border-style: solid;
     border-radius: 30px;
     padding: 20px;
+    height: 100vh;
+    max-height: 500px;
 }
 
 .tile-header {
