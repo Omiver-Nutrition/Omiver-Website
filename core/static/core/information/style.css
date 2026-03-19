@@ -49,7 +49,7 @@
 }
 
 .our-service-box .tile {
-    min-height: 350px;
+    min-height: 500px;
 }
 
 .tiles {
@@ -239,6 +239,7 @@
     width: auto;
     border: 1px solid black;
     padding: 10px;
+    margin: 0px 20px;
     border-radius: 100px;
 }
 
@@ -253,9 +254,11 @@
     justify-content: space-between;
     align-items: center;
     padding: 10px 10px;
-    margin: 5px 20px;
+    margin: 5px 10px;
     border-bottom: 1px solid #cccccc;
 }
+
+
 
 .our-test-kit-box h1 {
     font-weight: 400;
@@ -267,8 +270,9 @@
     display: flex;
     align-items: center;
     width: fit-content;
+    text-wrap-mode: nowrap;
 
-    font-size: 22px;
+    font-size: 20px;
     margin: 10px;
     padding: 5px;
     padding-left: 10px;
@@ -300,7 +304,7 @@
     margin-bottom: 20px;
 }
 
-.our-platform-box img {
+.our-platform-box>img {
     width: 100%;
 }
 
