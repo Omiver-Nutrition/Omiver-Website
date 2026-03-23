@@ -21,6 +21,31 @@ class BiomarkerTest(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
 
+class PaymentInfo(models.Model):
+    id = models.AutoField(primary_key=True)
+    client = models.ForeignKey("Client", on_delete=models.CASCADE)
+    payment_method = models.CharField(max_length=100)
+    payment_status = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+class Membership(models.Model):
+    id = models.AutoField(primary_key=True)
+    client = models.ForeignKey("Client", on_delete=models.CASCADE)
+    membership_type = models.SmallIntegerField(default=1)
+    start_date = models.DateTimeField()
+    end_date = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+class ShippingInfo(models.Model):
+    id = models.AutoField(primary_key=True)
+    client = models.ForeignKey("Client", on_delete=models.CASCADE)
+    date_shipped = models.DateTimeField()
+    tracking_number = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
 class Client(models.Model):
     USER_TYPES = [("PROVIDER", "healthcare"), ("INDIVIDUAL", "individual")]
     # linke to auth.user
