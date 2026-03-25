@@ -6,4 +6,7 @@ www.omiver.me {
     handle {
         reverse_proxy http://web:8000
     }
+    handle /app* {
+        reverse_proxy frontend:3000
+    }
 }
