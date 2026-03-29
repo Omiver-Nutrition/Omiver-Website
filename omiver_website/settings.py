@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "rest_framework",
     "rest_framework.authtoken",
+    "drf_spectacular",
     "api",
     "profiles",
     "core",
@@ -111,10 +112,10 @@ DATABASES = {
          'HOST': os.getenv('DATABASE_HOST'),
          'PORT': os.getenv('DATABASE_PORT'),
      },
-   # "default": {
-   #     "ENGINE": "django.db.backends.sqlite3",
-   #     "NAME": BASE_DIR / "db.sqlite3",
-   # }
+#    "default": {
+#        "ENGINE": "django.db.backends.sqlite3",
+#        "NAME": BASE_DIR / "db.sqlite3",
+#    }
 }
 
 
@@ -175,6 +176,14 @@ REST_FRAMEWORK = {
     ),
     # Allow unauthenticated access to certain API views if needed; enforce auth where required
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.AllowAny",),
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Omiver API",
+    "DESCRIPTION": "API documentation for the Omiver nutrition platform.",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
 }
 
 STATICFILES_FINDERS = [

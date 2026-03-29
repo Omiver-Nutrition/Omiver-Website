@@ -1,33 +1,157 @@
 from django.db import models
 from django.utils import timezone
 from datetime import datetime, timedelta
+import uuid
 
 
 class Biomarker(models.Model):
+    CATEGORY_CHOICES = [
+        ("METABOLIC", "Metabolic Health"),
+        ("CARDIOVASCULAR", "Cardiovascular Health"),
+        ("INFLAMMATION", "Inflammation"),
+        ("HORMONAL", "Hormonal Health"),
+        ("LIVER", "Liver Health"),
+        ("KIDNEY", "Kidney Health"),
+        ("THYROID", "Thyroid Health"),
+        ("OTHER", "Other"),
+    ]
+
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=100, unique=True, db_index=True)
     description = models.TextField(blank=True)
-    range_min = models.FloatField()
-    range_max = models.FloatField()
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default="OTHER")
+    range_min = models.FloatField(help_text="Normal range lower bound")
+    range_max = models.FloatField(help_text="Normal range upper bound")
+    optimal_min = models.FloatField(null=True, blank=True, help_text="Optimal range lower bound")
+    optimal_max = models.FloatField(null=True, blank=True, help_text="Optimal range upper bound")
     unit = models.CharField(max_length=50)
+
+    def __str__(self):
+        return f"{self.name} ({self.unit})"
 
 
 class BiomarkerTest(models.Model):
+    """A test session — groups multiple biomarker results recorded at the same time."""
+
     id = models.AutoField(primary_key=True)
-    client = models.ForeignKey("Client", on_delete=models.CASCADE)
-    data = models.JSONField()
+    client = models.ForeignKey("Client", on_delete=models.CASCADE, related_name="biomarker_tests")
+    data = models.JSONField(blank=True, null=True, help_text="Legacy raw data")
     recorded_at = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def __str__(self):
+        return f"Test for {self.client} on {self.recorded_at}"
+
+
+class BiomarkerResult(models.Model):
+    """Individual biomarker value from a test session."""
+
+    STATUS_CHOICES = [
+        ("OPTIMAL", "Optimal"),
+        ("NORMAL", "Normal"),
+        ("LOW", "Low"),
+        ("HIGH", "High"),
+    ]
+
+    id = models.AutoField(primary_key=True)
+    test = models.ForeignKey(BiomarkerTest, on_delete=models.CASCADE, related_name="results")
+    biomarker = models.ForeignKey(Biomarker, on_delete=models.CASCADE, related_name="results")
+    value = models.FloatField()
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("test", "biomarker")
+
+    def save(self, *args, **kwargs):
+        """Auto-compute status based on biomarker ranges."""
+        if not self.status:
+            bm = self.biomarker
+            if bm.optimal_min is not None and bm.optimal_max is not None:
+                if bm.optimal_min <= self.value <= bm.optimal_max:
+                    self.status = "OPTIMAL"
+                elif bm.range_min <= self.value <= bm.range_max:
+                    self.status = "NORMAL"
+                elif self.value < bm.range_min:
+                    self.status = "LOW"
+                else:
+                    self.status = "HIGH"
+            else:
+                if bm.range_min <= self.value <= bm.range_max:
+                    self.status = "NORMAL"
+                elif self.value < bm.range_min:
+                    self.status = "LOW"
+                else:
+                    self.status = "HIGH"
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.biomarker.name}: {self.value} {self.biomarker.unit} ({self.status})"
+
 
 class PaymentInfo(models.Model):
+    """Card payment details (only last 4 digits stored for security)."""
+
+    PAYMENT_STATUS_CHOICES = [
+        ("PENDING", "Pending"),
+        ("COMPLETED", "Completed"),
+        ("FAILED", "Failed"),
+        ("REFUNDED", "Refunded"),
+    ]
+
     id = models.AutoField(primary_key=True)
-    client = models.ForeignKey("Client", on_delete=models.CASCADE)
-    payment_method = models.CharField(max_length=100)
-    payment_status = models.CharField(max_length=100)
+    client = models.ForeignKey("Client", on_delete=models.CASCADE, related_name="payments")
+    cardholder_name = models.CharField(max_length=200)
+    card_last_four = models.CharField(max_length=4, help_text="Last 4 digits of card number")
+    card_brand = models.CharField(max_length=50, blank=True, help_text="e.g. Visa, Mastercard")
+    expiry_month = models.PositiveSmallIntegerField()
+    expiry_year = models.PositiveSmallIntegerField()
+    payment_method = models.CharField(max_length=100, default="card")
+    payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default="PENDING")
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Payment •••• {self.card_last_four} – ${self.amount} ({self.payment_status})"
+
+
+class BillingAddress(models.Model):
+    """Billing address associated with a payment."""
+
+    id = models.AutoField(primary_key=True)
+    payment = models.OneToOneField(PaymentInfo, on_delete=models.CASCADE, related_name="billing_address")
+    street_address = models.CharField(max_length=300)
+    city = models.CharField(max_length=100)
+    state = models.CharField(max_length=100)
+    zip_code = models.CharField(max_length=20)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.street_address}, {self.city}, {self.state} {self.zip_code}"
+
+
+class Purchase(models.Model):
+    """Ties a checkout transaction together: client + test kit + payment + billing → order."""
+
+    PURCHASE_STATUS_CHOICES = [
+        ("PENDING", "Pending"),
+        ("COMPLETED", "Completed"),
+        ("FAILED", "Failed"),
+    ]
+
+    id = models.AutoField(primary_key=True)
+    client = models.ForeignKey("Client", on_delete=models.CASCADE, related_name="purchases")
+    test_kit = models.ForeignKey("TestKit", on_delete=models.CASCADE, related_name="purchases")
+    payment = models.OneToOneField(PaymentInfo, on_delete=models.CASCADE, related_name="purchase")
+    order = models.OneToOneField("Order", on_delete=models.SET_NULL, null=True, blank=True, related_name="purchase")
+    status = models.CharField(max_length=20, choices=PURCHASE_STATUS_CHOICES, default="PENDING")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Purchase #{self.id} – {self.test_kit.name} for {self.client}"
 
 class Membership(models.Model):
     id = models.AutoField(primary_key=True)
@@ -46,17 +170,91 @@ class ShippingInfo(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+
+class TestKit(models.Model):
+    """Catalog of available test kits (e.g. Premium Test – 650 biomarkers)."""
+
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=200)
+    biomarker_count = models.PositiveIntegerField(default=0)
+    description = models.TextField(blank=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.biomarker_count} biomarkers)"
+
+
+class Order(models.Model):
+    """Represents a placed test-kit order with shipping/tracking info."""
+
+    STATUS_CHOICES = [
+        ("CONFIRMED", "Order Confirmed"),
+        ("SHIPPED", "Shipped"),
+        ("IN_TRANSIT", "In Transit"),
+        ("OUT_FOR_DELIVERY", "Out for Delivery"),
+        ("DELIVERED", "Delivered"),
+        ("CANCELLED", "Cancelled"),
+    ]
+
+    id = models.AutoField(primary_key=True)
+    client = models.ForeignKey("Client", on_delete=models.CASCADE, related_name="orders")
+    test_kit = models.ForeignKey(TestKit, on_delete=models.CASCADE, related_name="orders")
+    order_number = models.CharField(max_length=50, unique=True)
+    order_date = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="CONFIRMED")
+    tracking_number = models.CharField(max_length=100, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-order_date"]
+
+    def __str__(self):
+        return f"Order {self.order_number} – {self.test_kit.name} for {self.client}"
+
+
+class DeliveryEvent(models.Model):
+    """Individual delivery milestone (e.g. 'Order Placed', 'Kit Delivered')."""
+
+    EVENT_TYPES = [
+        ("ORDER_PLACED", "Order Placed"),
+        ("SHIPPED", "Shipped"),
+        ("IN_TRANSIT", "In Transit"),
+        ("OUT_FOR_DELIVERY", "Out for Delivery"),
+        ("DELIVERED", "Delivered"),
+    ]
+
+    id = models.AutoField(primary_key=True)
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="delivery_events")
+    event_type = models.CharField(max_length=20, choices=EVENT_TYPES)
+    title = models.CharField(max_length=200)
+    description = models.CharField(max_length=500, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    is_completed = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["timestamp"]
+
+    def __str__(self):
+        status = "✓" if self.is_completed else "…"
+        return f"[{status}] {self.title} – Order {self.order.order_number}"
+
 class Client(models.Model):
     USER_TYPES = [("PROVIDER", "healthcare"), ("INDIVIDUAL", "individual")]
-    # linke to auth.user
+    # link to auth.user
     user = models.OneToOneField("auth.User", on_delete=models.CASCADE, blank=True, null=True)
-    # extra field
+    # extra fields
     id = models.AutoField(primary_key=True)
     email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=100, blank=True)
     last_name = models.CharField(max_length=100, blank=True)
     type = models.CharField(max_length=10, choices=USER_TYPES, default="INDIVIDUAL")
     date_of_birth = models.DateField(blank=True, null=True)
+    bio=models.TextField(max_length=500, blank=True)
+    location = models.CharField(max_length=30, blank=True)
+    profile_pic = models.ImageField(upload_to='profile_pics', blank=True)
     gender = models.CharField(max_length=10, blank=True)
     height = models.FloatField(blank=True, null=True)
     weight = models.FloatField(blank=True, null=True)
@@ -67,8 +265,24 @@ class Client(models.Model):
     allergies = models.TextField(max_length=100, blank=True)
     fitness_goal = models.CharField(max_length=100, blank=True)
     nutritional_goal = models.TextField(blank=True)
+    # Referral system
+    referral_code = models.CharField(
+        max_length=16, unique=True, blank=True, null=True,
+        help_text="Unique code used for provider referral links. Auto-generated for PROVIDER accounts."
+    )
+    referred_by = models.ForeignKey(
+        "self", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="referred_patients",
+        help_text="The provider who referred this patient."
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        """Auto-generate referral_code for PROVIDER accounts if not already set."""
+        if self.type == "PROVIDER" and not self.referral_code:
+            self.referral_code = uuid.uuid4().hex[:10].upper()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"<Client {self.first_name} {self.last_name} ({self.email})>"

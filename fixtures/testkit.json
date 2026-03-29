@@ -1,0 +1,26 @@
+[
+  {
+    "model": "core.testkit",
+    "pk": 1,
+    "fields": {
+      "name": "Basic Test",
+      "biomarker_count": 150,
+      "description": "Essential Biomarker analysis",
+      "price": 199.00,
+      "created_at": "2026-03-27T16:20:00Z",
+      "updated_at": "2026-03-27T16:20:00Z"
+    }
+  },
+  {
+    "model": "core.testkit",
+    "pk": 2,
+    "fields": {
+      "name": "Premium Test",
+      "biomarker_count": 650,
+      "description": "Comprehensive health analysis",
+      "price": 499.00,
+      "created_at": "2026-03-27T16:20:00Z",
+      "updated_at": "2026-03-27T16:20:00Z"
+    }
+  }
+]

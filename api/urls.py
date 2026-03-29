@@ -17,4 +17,27 @@ urlpatterns = [
     path("register", views.register, name="register"),
     path("check_email", views.check_email, name="check_email"),
     path("login", views.login_handler, name="login"),
+    # test kits
+    path("kits", views.list_kits, name="list_kits"),
+    # orders & shipping tracking
+    path("orders", views.list_orders, name="list_orders"),
+    path("orders/create", views.create_order, name="create_order"),
+    path("orders/track", views.track_order, name="track_order"),
+    path("orders/<int:pk>", views.order_detail, name="order_detail"),
+    path("orders/<int:pk>/status", views.update_order_status, name="update_order_status"),
+    # checkout & purchases
+    path("checkout", views.checkout, name="checkout"),
+    path("purchases", views.purchase_history, name="purchase_history"),
+    path("purchases/<int:pk>", views.purchase_detail, name="purchase_detail"),
+    # biomarkers & dashboard
+    path("biomarkers", views.list_biomarkers, name="list_biomarkers"),
+    path("biomarker-tests", views.list_biomarker_tests, name="list_biomarker_tests"),
+    path("biomarker-tests/<int:pk>", views.biomarker_test_detail, name="biomarker_test_detail"),
+    path("dashboard", views.client_dashboard, name="client_dashboard"),
+    path("payments", views.client_payments, name="client_payments"),
+    path("memberships", views.client_memberships, name="client_memberships"),
+    # provider
+    path("provider/referral-link", views.get_referral_link, name="get_referral_link"),
+    path("provider/patients", views.get_provider_patients, name="get_provider_patients"),
 ]
+
