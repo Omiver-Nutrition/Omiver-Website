@@ -18,7 +18,7 @@
 
 
 {% block right_content %}
-  <p class="section-title">Login to Account</p>
+  <p class="section-title">Try our demo</p>
   <img class="logo" src="{% static 'green_logo.svg' %}" alt="Omiver Logo" />
 
 
@@ -33,13 +33,13 @@
   <form method="POST">
     {% csrf_token %}
     <span class="inputs">
-      <input type="text" name="username" id="username" placeholder="Email" required />
-      <input type="password" name="password" id="password" placeholder="Password" required />
+      <!-- <input type="text" name="username" id="username" placeholder="Email" required /> -->
+      <input type="text" name="login_code" id="login_code" placeholder="Code" required />
     </span>
     <button class="action-button login-button" type="submit">Login <img src="{% static 'next_arrow.svg' %}" /></button>
-    <h3 id="or-text"><span>OR</span></h3>
+    <!-- <h3 id="or-text"><span>OR</span></h3> -->
   </form>
-  <a class="action-button" href="/app/register">Create Account <img src="{% static 'next_arrow.svg' %}" /></a>
+  <!-- <a class="action-button" href="/app/register">Create Account <img src="{% static 'next_arrow.svg' %}" /></a> -->
 
   {% component "demo_modal" / %}
 
