@@ -23,7 +23,7 @@ from core.models import (
     MealPlan, Client, TestKit, Order, DeliveryEvent,
     PaymentInfo, BillingAddress, Purchase,
     Biomarker, BiomarkerTest, BiomarkerResult,
-    Membership,
+    Membership, Recommendation,
 )
 from collections import defaultdict
 from datetime import date
@@ -623,8 +623,8 @@ def checkout(request):
         client=client,
         test_kit=kit,
         order_number=_generate_order_number(),
-        tracking_number=_generate_tracking_number(),
-        status="CONFIRMED",
+        tracking_number="",
+        status="PENDING",
     )
 
     # Seed first delivery event
@@ -835,6 +835,18 @@ def client_dashboard(request):
     # ── Recent orders ───────────────────────────────────────────────
     recent_orders = Order.objects.filter(client=client).select_related("test_kit")[:5]
 
+    # ── Recommendations ─────────────────────────────────────────────
+    recommendations = list(Recommendation.objects.filter(client=client))
+    if not recommendations:
+        default_texts = [
+            "Continue maintaining your current metabolic health practices",
+            "Consider increasing omega-3 intake for cardiovascular support",
+            "Maintain your current exercise routine for optimal hormone balance",
+        ]
+        for text in default_texts:
+            rec = Recommendation.objects.create(client=client, text=text)
+            recommendations.append(rec)
+
     return Response({
         "profile": profile,
         "health_score": health_score,
@@ -843,6 +855,7 @@ def client_dashboard(request):
         "biomarker_results": categorized_results,
         "latest_test_date": latest_test.recorded_at if latest_test else None,
         "recent_orders": OrderSerializer(recent_orders, many=True).data,
+        "recommendations": [r.text for r in recommendations],
     })
 
 

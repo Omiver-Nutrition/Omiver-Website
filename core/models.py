@@ -190,6 +190,7 @@ class Order(models.Model):
     """Represents a placed test-kit order with shipping/tracking info."""
 
     STATUS_CHOICES = [
+        ("PENDING", "Pending"),
         ("CONFIRMED", "Order Confirmed"),
         ("SHIPPED", "Shipped"),
         ("IN_TRANSIT", "In Transit"),
@@ -203,7 +204,7 @@ class Order(models.Model):
     test_kit = models.ForeignKey(TestKit, on_delete=models.CASCADE, related_name="orders")
     order_number = models.CharField(max_length=50, unique=True)
     order_date = models.DateTimeField(auto_now_add=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="CONFIRMED")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="PENDING")
     tracking_number = models.CharField(max_length=100, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -345,3 +346,18 @@ class MealPlan(models.Model):
     @staticmethod
     def add_meal_plan(client, meals):
         pass
+
+
+class Recommendation(models.Model):
+    """Personalized recommendations for a client."""
+
+    id = models.AutoField(primary_key=True)
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="recommendations")
+    text = models.CharField(max_length=500)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Recommendation for {self.client}: {self.text}"
