@@ -131,6 +131,7 @@ GitHub.sublime-settings
 # Visual Studio Code # 
 .vscode
 .history
+*.code-workspace
 
 .pg_service.conf
 # Elastic Beanstalk Files
