@@ -17,4 +17,5 @@ dependencies = [
     "python-dotenv==1.1.1",
     "sqlparse==0.5.3",
     "drf-spectacular>=0.28.0",
+    "stripe>=15.0.1",
 ]

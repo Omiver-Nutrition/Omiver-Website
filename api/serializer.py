@@ -24,6 +24,15 @@ class ClientSerializer(serializers.ModelSerializer):
             "weight",
             "ethnicity",
             "allergies",
+            "dietary_recall",
+            "dietary_typicality",
+            "dietary_preference_mode",
+            "preferred_cuisines",
+            "avoided_cuisines",
+            "weekly_exercise_routine",
+            "exercise_days_per_week",
+            "exercise_types",
+            "provider_notes",
             "sport",
             "health_conditions",
             "dietary_preferences",
@@ -237,6 +246,15 @@ class ProviderPatientSerializer(serializers.ModelSerializer):
             "ethnicity",
             "health_conditions",
             "dietary_preferences",
+            "dietary_recall",
+            "dietary_typicality",
+            "dietary_preference_mode",
+            "preferred_cuisines",
+            "avoided_cuisines",
+            "weekly_exercise_routine",
+            "exercise_days_per_week",
+            "exercise_types",
+            "provider_notes",
             "fitness_goal",
             "created_at",
             "latest_test_date",
@@ -252,3 +270,53 @@ class ProviderPatientSerializer(serializers.ModelSerializer):
 
     def get_total_orders(self, obj):
         return obj.orders.count()
+
+
+class PricingTierSerializer(serializers.ModelSerializer):
+    """Serializer for volume discount pricing tiers."""
+    
+    class Meta:
+        model = PricingTier
+        fields = [
+            "id",
+            "test_kit",
+            "min_quantity",
+            "max_quantity",
+            "discount_percent",
+            "created_at",
+        ]
+
+
+class DietitianCommissionSerializer(serializers.ModelSerializer):
+    """Serializer for dietitian commissions."""
+    
+    provider_name = serializers.SerializerMethodField()
+    order_number = serializers.CharField(source="order.order_number", read_only=True)
+    
+    class Meta:
+        model = DietitianCommission
+        fields = [
+            "id",
+            "provider",
+            "provider_name",
+            "order",
+            "order_number",
+            "kit_quantity",
+            "kit_price",
+            "commission_percent",
+            "commission_amount",
+            "status",
+            "stripe_transfer_id",
+            "created_at",
+            "paid_at",
+        ]
+        read_only_fields = [
+            "id",
+            "commission_amount",
+            "created_at",
+            "paid_at",
+            "stripe_transfer_id",
+        ]
+    
+    def get_provider_name(self, obj):
+        return f"{obj.provider.first_name} {obj.provider.last_name}".strip() or obj.provider.email

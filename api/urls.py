@@ -27,6 +27,10 @@ urlpatterns = [
     path("orders/<int:pk>/status", views.update_order_status, name="update_order_status"),
     # checkout & purchases
     path("checkout", views.checkout, name="checkout"),
+    path("create-payment-intent", views.create_payment_intent, name="create_payment_intent"),
+    path("confirm-payment", views.confirm_payment, name="confirm_payment"),
+    path("stripe-webhook", views.stripe_webhook, name="stripe_webhook"),
+
     path("purchases", views.purchase_history, name="purchase_history"),
     path("purchases/<int:pk>", views.purchase_detail, name="purchase_detail"),
     # biomarkers & dashboard
@@ -39,5 +43,12 @@ urlpatterns = [
     # provider
     path("provider/referral-link", views.get_referral_link, name="get_referral_link"),
     path("provider/patients", views.get_provider_patients, name="get_provider_patients"),
+    path("provider/commissions", views.get_provider_commissions, name="get_provider_commissions"),
+    path("provider/commission-summary", views.get_commission_summary, name="get_commission_summary"),
+    path("provider/commission/approve", views.approve_commission, name="approve_commission"),
+    path("provider/commission/payout", views.process_commission_payout, name="process_commission_payout"),
+    # pricing
+    path("pricing/tiers", views.get_all_pricing_tiers, name="get_all_pricing_tiers"),
+    path("pricing/tiers/<int:kit_id>", views.get_kit_pricing_tiers, name="get_kit_pricing_tiers"),
 ]
 

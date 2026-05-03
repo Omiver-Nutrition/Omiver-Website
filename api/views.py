@@ -1,3 +1,10 @@
+import stripe
+import os
+from django.conf import settings
+
+stripe.api_key = settings.STRIPE_SECRET_KEY
+
+from django.views.decorators.csrf import csrf_exempt
 from django.utils.dateparse import parse_datetime
 from django.http import HttpResponse
 from django.contrib.auth import authenticate, login
@@ -18,12 +25,13 @@ from .serializer import (
     BiomarkerSerializer, BiomarkerResultSerializer,
     BiomarkerTestSerializer, BiomarkerTestDetailSerializer,
     ClientPaymentHistorySerializer, ProviderPatientSerializer,
+    DietitianCommissionSerializer, PricingTierSerializer,
 )
 from core.models import (
     MealPlan, Client, TestKit, Order, DeliveryEvent,
     PaymentInfo, BillingAddress, Purchase,
     Biomarker, BiomarkerTest, BiomarkerResult,
-    Membership, Recommendation,
+    Membership, Recommendation, DietitianCommission, PricingTier,
 )
 from collections import defaultdict
 from datetime import date
@@ -64,12 +72,20 @@ def create_client(request):
     responses={200: ClientSerializer, 404: None},
     tags=["Clients"],
 )
-@api_view(["GET"])
+@api_view(["GET", "PATCH"])
 def client_handler(request, pk):
     try:
         client = Client.objects.get(id=pk)
     except Client.DoesNotExist:
         return Response({"error": "Client not found"}, status.HTTP_404_NOT_FOUND)
+
+    if request.method == "PATCH":
+        serializer = ClientSerializer(client, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+        return Response(serializer.data, status.HTTP_200_OK)
+
     serializer = ClientSerializer(client)
     return Response(serializer.data)
 
@@ -112,6 +128,15 @@ def create_client_helper(data):
             "gender": serializers.CharField(required=False),
             "height": serializers.FloatField(required=False),
             "weight": serializers.FloatField(required=False),
+            "dietary_recall": serializers.CharField(required=False),
+            "dietary_typicality": serializers.IntegerField(required=False),
+            "dietary_preference_mode": serializers.CharField(required=False),
+            "preferred_cuisines": serializers.CharField(required=False),
+            "avoided_cuisines": serializers.CharField(required=False),
+            "weekly_exercise_routine": serializers.CharField(required=False),
+            "exercise_days_per_week": serializers.IntegerField(required=False),
+            "exercise_types": serializers.CharField(required=False),
+            "provider_notes": serializers.CharField(required=False),
             "referred_by_code": serializers.CharField(required=False),
         },
     ),
@@ -244,6 +269,118 @@ def get_provider_patients(request):
         .order_by("-created_at")
     )
     return Response(ProviderPatientSerializer(patients, many=True).data, status.HTTP_200_OK)
+
+
+@extend_schema(
+    summary="Get provider earned commissions",
+    description="Returns all commissions earned by a provider from referred patients' kit orders.",
+    parameters=[
+        OpenApiParameter(name="client_id", type=int, required=True, description="Provider's client ID"),
+        OpenApiParameter(name="status", type=str, required=False, description="Filter by commission status (PENDING, APPROVED, PAID, FAILED)"),
+    ],
+    responses={200: DietitianCommissionSerializer(many=True)},
+    tags=["Provider"],
+)
+@api_view(["GET"])
+def get_provider_commissions(request):
+    """Return all commissions earned by a provider."""
+    client_id = request.GET.get("client_id")
+    status_filter = request.GET.get("status")
+    
+    if not client_id:
+        return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        provider = Client.objects.get(pk=client_id, type="PROVIDER")
+    except Client.DoesNotExist:
+        return Response({"error": "Provider not found"}, status.HTTP_404_NOT_FOUND)
+    
+    commissions = DietitianCommission.objects.filter(provider=provider).select_related("order")
+    
+    if status_filter:
+        commissions = commissions.filter(status=status_filter)
+    
+    commissions = commissions.order_by("-created_at")
+    return Response(DietitianCommissionSerializer(commissions, many=True).data, status.HTTP_200_OK)
+
+
+@extend_schema(
+    summary="Get commission summary for provider",
+    description="Returns total earned, pending, and paid commissions for a provider.",
+    parameters=[
+        OpenApiParameter(name="client_id", type=int, required=True, description="Provider's client ID"),
+    ],
+    responses={200: None},
+    tags=["Provider"],
+)
+@api_view(["GET"])
+def get_commission_summary(request):
+    """Return commission summary for a provider."""
+    client_id = request.GET.get("client_id")
+    
+    if not client_id:
+        return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        provider = Client.objects.get(pk=client_id, type="PROVIDER")
+    except Client.DoesNotExist:
+        return Response({"error": "Provider not found"}, status.HTTP_404_NOT_FOUND)
+    
+    commissions = DietitianCommission.objects.filter(provider=provider)
+    
+    total_earned = sum(float(c.commission_amount) for c in commissions)
+    pending = sum(float(c.commission_amount) for c in commissions.filter(status="PENDING"))
+    approved = sum(float(c.commission_amount) for c in commissions.filter(status="APPROVED"))
+    paid = sum(float(c.commission_amount) for c in commissions.filter(status="PAID"))
+    
+    return Response({
+        "provider_id": provider.id,
+        "provider_name": f"{provider.first_name} {provider.last_name}".strip() or provider.email,
+        "total_earned": total_earned,
+        "pending": pending,
+        "approved": approved,
+        "paid": paid,
+        "commission_count": commissions.count(),
+    }, status.HTTP_200_OK)
+
+
+@extend_schema(
+    summary="Get pricing tiers for a test kit",
+    description="Returns all volume discount pricing tiers for a specific test kit.",
+    parameters=[
+        OpenApiParameter(name="kit_id", type=int, required=True, description="Test kit ID"),
+    ],
+    responses={200: PricingTierSerializer(many=True)},
+    tags=["Pricing"],
+)
+@api_view(["GET"])
+def get_kit_pricing_tiers(request):
+    """Return pricing tiers for a test kit."""
+    kit_id = request.GET.get("kit_id")
+    
+    if not kit_id:
+        return Response({"error": "kit_id is required"}, status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        kit = TestKit.objects.get(pk=kit_id)
+    except TestKit.DoesNotExist:
+        return Response({"error": "Test kit not found"}, status.HTTP_404_NOT_FOUND)
+    
+    tiers = kit.pricing_tiers.all().order_by("min_quantity")
+    return Response(PricingTierSerializer(tiers, many=True).data, status.HTTP_200_OK)
+
+
+@extend_schema(
+    summary="Get all pricing tiers",
+    description="Returns all volume discount pricing tiers across all test kits.",
+    responses={200: PricingTierSerializer(many=True)},
+    tags=["Pricing"],
+)
+@api_view(["GET"])
+def get_all_pricing_tiers(request):
+    """Return all pricing tiers."""
+    tiers = PricingTier.objects.all().select_related("test_kit").order_by("test_kit", "min_quantity")
+    return Response(PricingTierSerializer(tiers, many=True).data, status.HTTP_200_OK)
 
 
 @extend_schema(
@@ -554,6 +691,273 @@ def _detect_card_brand(number: str) -> str:
 
 
 @extend_schema(
+    summary="Create a PaymentIntent",
+    description="Create a Stripe PaymentIntent for a specific test kit. Returns the client secret.",
+    request=inline_serializer(
+        name="CreatePaymentIntentRequest",
+        fields={
+            "test_kit_id": serializers.IntegerField(),
+            "client_id": serializers.IntegerField(),
+        },
+    ),
+    responses={200: inline_serializer(
+        name="PaymentIntentResponse",
+        fields={"clientSecret": serializers.CharField()},
+    )},
+    tags=["Checkout"],
+)
+@api_view(["POST"])
+def create_payment_intent(request):
+    data = request.data
+    test_kit_id = data.get("test_kit_id")
+    client_id = data.get("client_id")
+    quantity = int(data.get("quantity", 1))
+
+    if not test_kit_id:
+        return Response({"error": "test_kit_id is required"}, status.HTTP_400_BAD_REQUEST)
+
+    try:
+        kit = TestKit.objects.get(pk=test_kit_id)
+    except TestKit.DoesNotExist:
+        return Response({"error": "Test kit not found"}, status.HTTP_404_NOT_FOUND)
+
+    # Calculate amount based on quantity and pricing tiers
+    total_price = kit.get_price_for_quantity(quantity)
+    amount = int(total_price * 100)
+
+    try:
+        intent = stripe.PaymentIntent.create(
+            amount=amount,
+            currency="usd",
+            automatic_payment_methods={
+                'enabled': True,
+            },
+            metadata={
+                "test_kit_id": kit.id,
+                "client_id": client_id,
+                "quantity": str(quantity),
+            }
+        )
+        return Response({"clientSecret": intent.client_secret}, status.HTTP_200_OK)
+    except Exception as e:
+        return Response({"error": str(e)}, status.HTTP_400_BAD_REQUEST)
+
+
+@extend_schema(
+    summary="Confirm Payment and Create Order",
+    description="Verify a successful Stripe payment and create the corresponding order.",
+    request=inline_serializer(
+        name="ConfirmPaymentRequest",
+        fields={
+            "payment_intent_id": serializers.CharField(),
+            "street_address": serializers.CharField(),
+            "city": serializers.CharField(),
+            "state": serializers.CharField(),
+            "zip_code": serializers.CharField(),
+        },
+    ),
+    responses={201: PurchaseDetailSerializer, 400: None},
+    tags=["Checkout"],
+)
+@api_view(["POST"])
+def confirm_payment(request):
+    data = request.data
+    payment_intent_id = data.get("payment_intent_id")
+
+    if not payment_intent_id:
+        return Response({"error": "payment_intent_id is required"}, status.HTTP_400_BAD_REQUEST)
+
+    try:
+        intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+        
+        if intent.status != "succeeded":
+            return Response({"error": f"Payment status is {intent.status}"}, status.HTTP_400_BAD_REQUEST)
+
+        if PaymentInfo.objects.filter(stripe_payment_intent_id=payment_intent_id).exists():
+            return Response({"message": "Payment already processed"}, status.HTTP_200_OK)
+
+        test_kit_id = intent.metadata.get("test_kit_id")
+        client_id = intent.metadata.get("client_id")
+        quantity = int(intent.metadata.get("quantity", 1))
+
+        if not test_kit_id or not client_id:
+             return Response({"error": "Missing metadata in payment intent"}, status.HTTP_400_BAD_REQUEST)
+
+        client = Client.objects.get(pk=client_id)
+        kit = TestKit.objects.get(pk=test_kit_id)
+
+        card_brand = "Card"
+        card_last_four = "0000"
+        
+        if intent.charges and intent.charges.data:
+            charge = intent.charges.data[0]
+            if charge.payment_method_details and charge.payment_method_details.card:
+                card = charge.payment_method_details.card
+                card_brand = card.brand
+                card_last_four = card.last4
+
+        # Calculate total amount based on quantity and pricing tiers
+        total_amount = kit.get_price_for_quantity(quantity)
+
+        payment = PaymentInfo.objects.create(
+            client=client,
+            cardholder_name=data.get("cardholder_name", ""),
+            card_last_four=card_last_four,
+            card_brand=card_brand,
+            expiry_month=1,
+            expiry_year=2026,
+            payment_method="card",
+            payment_status="COMPLETED",
+            amount=total_amount,
+            stripe_payment_intent_id=payment_intent_id,
+        )
+
+        BillingAddress.objects.create(
+            payment=payment,
+            street_address=data.get("street_address"),
+            city=data.get("city"),
+            state=data.get("state"),
+            zip_code=data.get("zip_code"),
+        )
+
+        order = Order.objects.create(
+            client=client,
+            test_kit=kit,
+            order_number=_generate_order_number(),
+            quantity=quantity,
+            tracking_number="",
+            status="PENDING",
+        )
+
+        DeliveryEvent.objects.create(
+            order=order,
+            event_type="ORDER_PLACED",
+            title="Order Placed",
+            description="Your order has been received",
+            is_completed=True,
+        )
+
+        # Create dietitian commission if this client was referred by a provider
+        if client.referred_by and client.referred_by.type == "PROVIDER":
+            unit_price = float(kit.price)
+            DietitianCommission.objects.create(
+                provider=client.referred_by,
+                order=order,
+                kit_quantity=quantity,
+                kit_price=unit_price,
+                commission_percent=kit.commission_percent,
+                status="PENDING",
+            )
+
+        purchase = Purchase.objects.create(
+            client=client,
+            test_kit=kit,
+            payment=payment,
+            order=order,
+            status="COMPLETED",
+        )
+
+        return Response(PurchaseDetailSerializer(purchase).data, status.HTTP_201_CREATED)
+
+    except stripe.error.StripeError as e:
+        return Response({"error": str(e)}, status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({"error": str(e)}, status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@csrf_exempt
+@api_view(["POST"])
+def stripe_webhook(request):
+    payload = request.body
+    sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')
+    endpoint_secret = os.getenv('STRIPE_WEBHOOK_SECRET')
+
+    try:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, endpoint_secret
+        )
+    except ValueError as e:
+        return HttpResponse(status=400)
+    except stripe.error.SignatureVerificationError as e:
+        return HttpResponse(status=400)
+
+    if event['type'] == 'payment_intent.succeeded':
+        payment_intent = event['data']['object']
+        payment_intent_id = payment_intent['id']
+        
+        if not PaymentInfo.objects.filter(stripe_payment_intent_id=payment_intent_id).exists():
+             test_kit_id = payment_intent.metadata.get("test_kit_id")
+             client_id = payment_intent.metadata.get("client_id")
+
+             if test_kit_id and client_id:
+                 try:
+                     client = Client.objects.get(pk=client_id)
+                     kit = TestKit.objects.get(pk=test_kit_id)
+                     
+                     card_brand = "Card"
+                     card_last_four = "0000"
+                     if payment_intent.charges and payment_intent.charges.data:
+                         charge = payment_intent.charges.data[0]
+                         if charge.payment_method_details and charge.payment_method_details.card:
+                             card = charge.payment_method_details.card
+                             card_brand = card.brand
+                             card_last_four = card.last4
+
+                     payment = PaymentInfo.objects.create(
+                         client=client,
+                         cardholder_name="",
+                         card_last_four=card_last_four,
+                         card_brand=card_brand,
+                         expiry_month=1,
+                         expiry_year=2026,
+                         payment_method="card",
+                         payment_status="COMPLETED",
+                         amount=kit.price,
+                         stripe_payment_intent_id=payment_intent_id,
+                     )
+
+                     BillingAddress.objects.create(
+                         payment=payment,
+                         street_address="Webhook Address",
+                         city="Webhook City",
+                         state="Webhook State",
+                         zip_code="00000",
+                     )
+
+                     order = Order.objects.create(
+                         client=client,
+                         test_kit=kit,
+                         order_number=_generate_order_number(),
+                         tracking_number="",
+                         status="PENDING",
+                     )
+
+                     DeliveryEvent.objects.create(
+                         order=order,
+                         event_type="ORDER_PLACED",
+                         title="Order Placed",
+                         description="Your order has been received (Webhook)",
+                         is_completed=True,
+                     )
+
+                     Purchase.objects.create(
+                         client=client,
+                         test_kit=kit,
+                         payment=payment,
+                         order=order,
+                         status="COMPLETED",
+                     )
+                 except Exception as e:
+                     print(f"Error processing webhook for {payment_intent_id}: {e}")
+                     return HttpResponse(status=500)
+
+    return HttpResponse(status=200)
+
+
+
+
+
+@extend_schema(
     summary="Checkout — purchase a test kit",
     description=(
         "Complete checkout: validates card & billing info, creates payment record, "
@@ -836,16 +1240,7 @@ def client_dashboard(request):
     recent_orders = Order.objects.filter(client=client).select_related("test_kit")[:5]
 
     # ── Recommendations ─────────────────────────────────────────────
-    recommendations = list(Recommendation.objects.filter(client=client))
-    if not recommendations:
-        default_texts = [
-            "Continue maintaining your current metabolic health practices",
-            "Consider increasing omega-3 intake for cardiovascular support",
-            "Maintain your current exercise routine for optimal hormone balance",
-        ]
-        for text in default_texts:
-            rec = Recommendation.objects.create(client=client, text=text)
-            recommendations.append(rec)
+    recommendations = list(Recommendation.objects.filter(client=client).values_list('text', flat=True))
 
     return Response({
         "profile": profile,
@@ -855,7 +1250,7 @@ def client_dashboard(request):
         "biomarker_results": categorized_results,
         "latest_test_date": latest_test.recorded_at if latest_test else None,
         "recent_orders": OrderSerializer(recent_orders, many=True).data,
-        "recommendations": [r.text for r in recommendations],
+        "recommendations": recommendations,
     })
 
 
@@ -911,3 +1306,99 @@ def client_memberships(request):
         for m in memberships
     ]
     return Response(data)
+
+
+@extend_schema(
+    summary="Approve pending commission",
+    description="Mark a pending commission as approved (ready for payout processing).",
+    parameters=[
+        OpenApiParameter(name="commission_id", type=int, required=True, description="Commission ID"),
+    ],
+    responses={200: DietitianCommissionSerializer},
+    tags=["Provider"],
+)
+@api_view(["PATCH"])
+def approve_commission(request):
+    """Approve a pending commission for payment processing."""
+    commission_id = request.GET.get("commission_id")
+    
+    if not commission_id:
+        return Response({"error": "commission_id is required"}, status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        commission = DietitianCommission.objects.get(pk=commission_id)
+    except DietitianCommission.DoesNotExist:
+        return Response({"error": "Commission not found"}, status.HTTP_404_NOT_FOUND)
+    
+    if commission.status != "PENDING":
+        return Response(
+            {"error": f"Cannot approve commission with status {commission.status}"},
+            status.HTTP_400_BAD_REQUEST
+        )
+    
+    commission.status = "APPROVED"
+    commission.save()
+    return Response(DietitianCommissionSerializer(commission).data, status.HTTP_200_OK)
+
+
+@extend_schema(
+    summary="Process commission payout",
+    description="Process a Stripe payout for an approved commission. Requires provider's Stripe connected account.",
+    request=inline_serializer(
+        name="ProcessCommissionRequest",
+        fields={
+            "commission_id": serializers.IntegerField(),
+            "stripe_account_id": serializers.CharField(required=False, help_text="Provider's Stripe connected account ID"),
+        },
+    ),
+    responses={200: DietitianCommissionSerializer},
+    tags=["Provider"],
+)
+@api_view(["POST"])
+def process_commission_payout(request):
+    """Process payout for an approved commission via Stripe transfer."""
+    data = request.data
+    commission_id = data.get("commission_id")
+    stripe_account_id = data.get("stripe_account_id")
+    
+    if not commission_id:
+        return Response({"error": "commission_id is required"}, status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        commission = DietitianCommission.objects.get(pk=commission_id)
+    except DietitianCommission.DoesNotExist:
+        return Response({"error": "Commission not found"}, status.HTTP_404_NOT_FOUND)
+    
+    if commission.status != "APPROVED":
+        return Response(
+            {"error": f"Cannot process commission with status {commission.status}. Must be APPROVED."},
+            status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        # Create Stripe transfer to connected account (if account provided)
+        if stripe_account_id:
+            transfer = stripe.Transfer.create(
+                amount=int(commission.commission_amount * 100),
+                currency="usd",
+                destination=stripe_account_id,
+                description=f"Commission for order {commission.order.order_number}",
+            )
+            commission.stripe_transfer_id = transfer.id
+        
+        commission.status = "PAID"
+        commission.paid_at = timezone.now()
+        commission.save()
+        
+        return Response(DietitianCommissionSerializer(commission).data, status.HTTP_200_OK)
+    
+    except stripe.error.StripeError as e:
+        return Response(
+            {"error": f"Stripe error: {str(e)}"},
+            status.HTTP_400_BAD_REQUEST
+        )
+    except Exception as e:
+        return Response(
+            {"error": str(e)},
+            status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

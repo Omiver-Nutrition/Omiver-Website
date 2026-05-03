@@ -109,6 +109,7 @@ class PaymentInfo(models.Model):
     expiry_year = models.PositiveSmallIntegerField()
     payment_method = models.CharField(max_length=100, default="card")
     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default="PENDING")
+    stripe_payment_intent_id = models.CharField(max_length=255, blank=True, null=True, help_text="Stripe PaymentIntent ID")
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -179,11 +180,34 @@ class TestKit(models.Model):
     biomarker_count = models.PositiveIntegerField(default=0)
     description = models.TextField(blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    commission_percent = models.DecimalField(max_digits=5, decimal_places=2, default=10, help_text="Commission percentage for providers/dietitians (e.g., 10 for 10%)")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.name} ({self.biomarker_count} biomarkers)"
+    
+    def get_price_for_quantity(self, quantity):
+        """Calculate the final price for a given quantity based on volume tiers."""
+        from django.db.models import Q
+        
+        if quantity < 1:
+            quantity = 1
+        
+        # Find applicable pricing tier
+        tier = self.pricing_tiers.filter(
+            min_quantity__lte=quantity
+        ).filter(
+            Q(max_quantity__isnull=True) | Q(max_quantity__gte=quantity)
+        ).order_by("-min_quantity").first()
+        
+        if tier:
+            discount_multiplier = (100 - tier.discount_percent) / 100
+            unit_price = float(self.price) * float(discount_multiplier)
+        else:
+            unit_price = float(self.price)
+        
+        return quantity * unit_price
 
 
 class Order(models.Model):
@@ -204,6 +228,7 @@ class Order(models.Model):
     test_kit = models.ForeignKey(TestKit, on_delete=models.CASCADE, related_name="orders")
     order_number = models.CharField(max_length=50, unique=True)
     order_date = models.DateTimeField(auto_now_add=True)
+    quantity = models.PositiveIntegerField(default=1, help_text="Number of kits ordered")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="PENDING")
     tracking_number = models.CharField(max_length=100, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -264,6 +289,15 @@ class Client(models.Model):
     health_conditions = models.TextField(max_length=100, blank=True)
     dietary_preferences = models.TextField(max_length=100, blank=True)
     allergies = models.TextField(max_length=100, blank=True)
+    dietary_recall = models.TextField(blank=True)
+    dietary_typicality = models.PositiveSmallIntegerField(null=True, blank=True, help_text="How typical the 24-hour recall is on a 1-10 scale")
+    dietary_preference_mode = models.CharField(max_length=20, blank=True, help_text="Whether the client wants similar or different recommendations")
+    preferred_cuisines = models.TextField(blank=True)
+    avoided_cuisines = models.TextField(blank=True)
+    weekly_exercise_routine = models.TextField(blank=True)
+    exercise_days_per_week = models.PositiveSmallIntegerField(null=True, blank=True)
+    exercise_types = models.TextField(blank=True)
+    provider_notes = models.TextField(blank=True)
     fitness_goal = models.CharField(max_length=100, blank=True)
     nutritional_goal = models.TextField(blank=True)
     # Referral system
@@ -361,3 +395,57 @@ class Recommendation(models.Model):
 
     def __str__(self):
         return f"Recommendation for {self.client}: {self.text}"
+
+
+class PricingTier(models.Model):
+    """Volume discount tiers for B2B ordering."""
+
+    id = models.AutoField(primary_key=True)
+    test_kit = models.ForeignKey(TestKit, on_delete=models.CASCADE, related_name="pricing_tiers")
+    min_quantity = models.PositiveIntegerField(help_text="Minimum quantity for this tier")
+    max_quantity = models.PositiveIntegerField(null=True, blank=True, help_text="Maximum quantity for this tier, null for unlimited")
+    discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Discount percentage (e.g., 5.00 for 5%)")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["min_quantity"]
+        unique_together = ("test_kit", "min_quantity")
+
+    def __str__(self):
+        max_qty = f"- {self.max_quantity}" if self.max_quantity else "+"
+        return f"{self.test_kit.name}: {self.min_quantity} {max_qty} kits = {self.discount_percent}% off"
+
+
+class DietitianCommission(models.Model):
+    """Tracks commissions earned by dietitians on kit sales."""
+
+    COMMISSION_STATUS_CHOICES = [
+        ("PENDING", "Pending"),
+        ("APPROVED", "Approved"),
+        ("PAID", "Paid"),
+        ("FAILED", "Failed"),
+    ]
+
+    id = models.AutoField(primary_key=True)
+    provider = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="earned_commissions", help_text="Provider/Dietitian who earned the commission")
+    order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name="commission", help_text="Order that triggered the commission")
+    kit_quantity = models.PositiveIntegerField(default=1, help_text="Number of kits in the order")
+    kit_price = models.DecimalField(max_digits=10, decimal_places=2, help_text="Price per kit at time of order")
+    commission_percent = models.DecimalField(max_digits=5, decimal_places=2, default=10, help_text="Commission percentage (e.g., 10 for 10%)")
+    commission_amount = models.DecimalField(max_digits=10, decimal_places=2, help_text="Calculated commission amount (kit_price * kit_quantity * commission_percent / 100)")
+    status = models.CharField(max_length=20, choices=COMMISSION_STATUS_CHOICES, default="PENDING")
+    stripe_transfer_id = models.CharField(max_length=255, blank=True, null=True, help_text="Stripe transfer ID when payment is sent")
+    created_at = models.DateTimeField(auto_now_add=True)
+    paid_at = models.DateTimeField(null=True, blank=True, help_text="When the commission was paid out")
+
+    def __str__(self):
+        return f"Commission for {self.provider.first_name} – ${self.commission_amount} ({self.status})"
+
+    def save(self, *args, **kwargs):
+        """Auto-calculate commission amount if not already set."""
+        if not self.commission_amount:
+            self.commission_amount = (
+                (self.kit_price * self.kit_quantity * self.commission_percent) / 100
+            )
+        super().save(*args, **kwargs)
