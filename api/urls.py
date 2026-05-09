@@ -21,6 +21,7 @@ urlpatterns = [
     path("kits", views.list_kits, name="list_kits"),
     # orders & shipping tracking
     path("orders", views.list_orders, name="list_orders"),
+    path("orders/export/csv", views.export_orders_csv, name="export_orders_csv"),
     path("orders/create", views.create_order, name="create_order"),
     path("orders/track", views.track_order, name="track_order"),
     path("orders/<int:pk>", views.order_detail, name="order_detail"),

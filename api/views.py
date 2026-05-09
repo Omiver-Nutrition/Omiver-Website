@@ -1,5 +1,6 @@
 import stripe
 import os
+import csv
 from django.conf import settings
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -533,6 +534,78 @@ def list_orders(request):
         return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
     orders = Order.objects.filter(client_id=client_id).select_related("test_kit")
     return Response(OrderSerializer(orders, many=True).data)
+
+
+def _csv_safe(value):
+    """Prevent spreadsheet formula injection in exported CSV cells."""
+    if value is None:
+        return ""
+    text = str(value)
+    if text.startswith(("=", "+", "-", "@")):
+        return f"'{text}"
+    return text
+
+
+@extend_schema(
+    summary="Export orders as CSV",
+    description=(
+        "Download the orders table as a CSV file that can be opened directly in "
+        "Google Sheets or Excel. Optional `client_id` filters the exported rows."
+    ),
+    parameters=[
+        OpenApiParameter(name="client_id", type=int, required=False, description="Optional Client ID filter"),
+    ],
+    responses={200: None},
+    tags=["Orders"],
+)
+@api_view(["GET"])
+def export_orders_csv(request):
+    """Export order rows as CSV for spreadsheet import."""
+    client_id = request.GET.get("client_id")
+
+    orders = Order.objects.select_related("client", "test_kit").order_by("-order_date")
+    if client_id:
+        orders = orders.filter(client_id=client_id)
+
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="orders_export_{date.today().isoformat()}.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow([
+        "id",
+        "order_number",
+        "order_date",
+        "status",
+        "tracking_number",
+        "quantity",
+        "client_id",
+        "client_name",
+        "client_email",
+        "test_kit_id",
+        "test_kit_name",
+        "created_at",
+        "updated_at",
+    ])
+
+    for order in orders:
+        client_name = f"{order.client.first_name} {order.client.last_name}".strip()
+        writer.writerow([
+            order.id,
+            _csv_safe(order.order_number),
+            order.order_date.isoformat() if order.order_date else "",
+            _csv_safe(order.status),
+            _csv_safe(order.tracking_number),
+            order.quantity,
+            order.client_id,
+            _csv_safe(client_name),
+            _csv_safe(order.client.email),
+            order.test_kit_id,
+            _csv_safe(order.test_kit.name),
+            order.created_at.isoformat() if order.created_at else "",
+            order.updated_at.isoformat() if order.updated_at else "",
+        ])
+
+    return response
 
 
 @extend_schema(
