@@ -103,20 +103,25 @@ WSGI_APPLICATION = "omiver_website.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-   'default': {
-       'ENGINE': 'django.db.backends.postgresql',
-       'NAME': os.getenv('DATABASE_NAME'),
-       'USER': os.getenv('DATABASE_USER'),
-       'PASSWORD': os.getenv('DATABASE_PASSWORD'),
-       'HOST': os.getenv('DATABASE_HOST'),
-       'PORT': os.getenv('DATABASE_PORT'),
-   },
-   #"default": {
-   #    "ENGINE": "django.db.backends.sqlite3",
-   #    "NAME": BASE_DIR / "db.sqlite3",
-   #}
-}
+# Use PostgreSQL if environment variables are set, otherwise fall back to SQLite
+if os.getenv('DATABASE_NAME'):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv('DATABASE_NAME'),
+            'USER': os.getenv('DATABASE_USER'),
+            'PASSWORD': os.getenv('DATABASE_PASSWORD'),
+            'HOST': os.getenv('DATABASE_HOST'),
+            'PORT': os.getenv('DATABASE_PORT'),
+        }
+    }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -174,8 +179,7 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework.authentication.TokenAuthentication",
     ),
-    # Allow unauthenticated access to certain API views if needed; enforce auth where required
-    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.AllowAny",),
+    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 

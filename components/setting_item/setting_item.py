@@ -2,8 +2,8 @@ from django_components import Component, register
 
 @register("setting_item")
 class Icon(Component):
-    template_file = "setting_item.html"
-    css_file = "setting_item.css"
+    template_file = "setting_item/setting_item.html"
+    css_file = "setting_item/setting_item.css"
 
     def get_template_data(self, args, kwargs, slots, context):
         return {

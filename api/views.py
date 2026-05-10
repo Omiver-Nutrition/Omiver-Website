@@ -7,13 +7,14 @@ stripe.api_key = settings.STRIPE_SECRET_KEY
 
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.dateparse import parse_datetime
+from django.utils import timezone
 from django.http import HttpResponse
 from django.contrib.auth import authenticate, login
-from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from rest_framework import status
 from rest_framework.response import Response
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.authtoken.models import Token
 from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serializer
 from rest_framework import serializers
@@ -50,8 +51,8 @@ def index(request):
     responses={201: ClientSerializer},
     tags=["Clients"],
 )
-@login_required
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def create_client(request):
     # extract profile data if present
     client_data = request.data
@@ -145,6 +146,7 @@ def create_client_helper(data):
     tags=["Auth"],
 )
 @api_view(["POST"])
+@permission_classes([AllowAny])
 def register(request):
     """register user
 
@@ -355,9 +357,9 @@ def get_commission_summary(request):
     tags=["Pricing"],
 )
 @api_view(["GET"])
-def get_kit_pricing_tiers(request):
+def get_kit_pricing_tiers(request, kit_id=None):
     """Return pricing tiers for a test kit."""
-    kit_id = request.GET.get("kit_id")
+    kit_id = request.GET.get("kit_id") or kit_id
     
     if not kit_id:
         return Response({"error": "kit_id is required"}, status.HTTP_400_BAD_REQUEST)
@@ -398,6 +400,7 @@ def get_all_pricing_tiers(request):
     tags=["Auth"],
 )
 @api_view(["POST"])
+@permission_classes([AllowAny])
 def login_handler(request):
     data = request.data
     user = authenticate(**data)
@@ -429,6 +432,7 @@ def login_handler(request):
     tags=["Auth"],
 )
 @api_view(["GET"])
+@permission_classes([AllowAny])
 def check_email(request):
     """Check if a username (email) already exists.
 
@@ -451,8 +455,8 @@ def check_email(request):
     responses={200: None},
     tags=["Meal Plans"],
 )
-@login_required
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def generate_mealPlan(request, client_id):
     client = Client.objects.get(id=client_id)
     return Response({"message": f"will send client info: {client}"}, status.HTTP_200_OK)
@@ -485,19 +489,7 @@ def meal_plan(request):
     start_dt = parse_datetime(start_date) if start_date else None
     end_dt = parse_datetime(end_date) if end_date else None
     meal_plans = MealPlan.get_meal_plans_by_client_and_date(client_id, start_dt, end_dt)
-    # Serialize meal plans
-    meal_plan_list = [
-        {
-            "id": mp.id,
-            "client_id": mp.client_id,
-            "timestamp": mp.timestamp,
-            "meals": mp.meals,
-            "created_at": mp.created_at,
-            "updated_at": mp.updated_at,
-        }
-        for mp in meal_plans
-    ]
-    meal_plan = MealPlanSerializer(meal_plan_list, many=True)
+    meal_plan = MealPlanSerializer(meal_plans, many=True)
     return Response(meal_plan.data)
 
 
@@ -940,6 +932,7 @@ def confirm_payment(request):
 
 @csrf_exempt
 @api_view(["POST"])
+@permission_classes([AllowAny])
 def stripe_webhook(request):
     payload = request.body
     sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')

@@ -2,8 +2,8 @@ from django_components import Component, register
 
 @register("custom_slider")
 class CustomSlider(Component):
-    template_file = "custom_slider.html"
-    css_file = "custom_slider.css"
+    template_file = "custom_slider/custom_slider.html"
+    css_file = "custom_slider/custom_slider.css"
 
     def get_template_data(self, args, kwargs, slots, context):
         return {
