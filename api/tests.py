@@ -287,6 +287,18 @@ class ApiSmokeTests(TestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertTrue(response.data["exists"])
 
+	def test_validate_referral_code_reports_valid_provider_code(self):
+		response = self.public_client.get(reverse("validate_referral_code"), {"code": self.provider.referral_code})
+
+		self.assertEqual(response.status_code, 200)
+		self.assertTrue(response.data["isValid"])
+
+	def test_validate_referral_code_reports_invalid_code(self):
+		response = self.public_client.get(reverse("validate_referral_code"), {"code": "NOTREAL"})
+
+		self.assertEqual(response.status_code, 200)
+		self.assertFalse(response.data["isValid"])
+
 	def test_login_handler_returns_client_data(self):
 		response = self.public_client.post(
 			reverse("login"),
@@ -296,6 +308,7 @@ class ApiSmokeTests(TestCase):
 
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(response.data["email"], self.login_client.email)
+		self.assertIn("token", response.data)
 		self.assertEqual(self.public_client.session["client_id"], self.login_client.id)
 
 	def test_generate_meal_plan_requires_login(self):

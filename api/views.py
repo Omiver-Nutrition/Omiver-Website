@@ -244,6 +244,31 @@ def get_referral_link(request):
 
 
 @extend_schema(
+    summary="Validate referral code",
+    description="Checks whether a referral code belongs to an existing provider account.",
+    parameters=[
+        OpenApiParameter(name="code", type=str, required=True, description="Provider referral code"),
+    ],
+    responses={200: inline_serializer(
+        name="ValidateReferralCodeResponse",
+        fields={
+            "isValid": serializers.BooleanField(),
+        },
+    )},
+    tags=["Provider"],
+)
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def validate_referral_code(request):
+    code = (request.GET.get("code") or "").strip().upper()
+    if not code:
+        return Response({"isValid": False}, status.HTTP_200_OK)
+
+    is_valid = Client.objects.filter(referral_code=code, type="PROVIDER").exists()
+    return Response({"isValid": is_valid}, status.HTTP_200_OK)
+
+
+@extend_schema(
     summary="List provider's patients",
     description=(
         "Returns all patients who registered using the provider's referral link, "
@@ -411,9 +436,14 @@ def login_handler(request):
     try:
         user = User.objects.get(username=user.username)
         client = Client.objects.get(user=user)
+        token, _ = Token.objects.get_or_create(user=user)
         client_serializer = ClientSerializer(client)
         request.session["client_id"] = client.id
-        return Response(client_serializer.data, status.HTTP_200_OK)
+        return Response({
+            **client_serializer.data,
+            "token": token.key,
+            "token_type": "Token",
+        }, status.HTTP_200_OK)
     except Exception as e:
         print(e)
         return Response({"error": e}, status.HTTP_404_NOT_FOUND)

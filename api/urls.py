@@ -16,6 +16,7 @@ urlpatterns = [
     # account api
     path("register", views.register, name="register"),
     path("check_email", views.check_email, name="check_email"),
+    path("validate_referral_code", views.validate_referral_code, name="validate_referral_code"),
     path("login", views.login_handler, name="login"),
     # test kits
     path("kits", views.list_kits, name="list_kits"),
