@@ -10,6 +10,7 @@ from django.utils.dateparse import parse_datetime
 from django.utils import timezone
 from django.http import HttpResponse
 from django.contrib.auth import authenticate, login
+from django.contrib.auth import logout
 from django.contrib.auth.models import User
 from rest_framework import status
 from rest_framework.response import Response
@@ -439,6 +440,8 @@ def login_handler(request):
         token, _ = Token.objects.get_or_create(user=user)
         client_serializer = ClientSerializer(client)
         request.session["client_id"] = client.id
+        print(f"-----debug session client_id set to {client.id} -----")
+        print(f"-----debug session data: {request.session.items()} -----")
         return Response({
             **client_serializer.data,
             "token": token.key,
@@ -447,6 +450,23 @@ def login_handler(request):
     except Exception as e:
         print(e)
         return Response({"error": e}, status.HTTP_404_NOT_FOUND)
+
+
+@extend_schema(
+    summary="Logout",
+    description="Log out the current session user and clear server session.",
+    responses={200: None},
+    tags=["Auth"],
+)
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def logout_handler(request):
+    try:
+        logout(request)
+        request.session.flush()
+    except Exception:
+        pass
+    return Response({"message": "logged out"}, status.HTTP_200_OK)
 
 
 @extend_schema(
@@ -855,45 +875,61 @@ def create_payment_intent(request):
     tags=["Checkout"],
 )
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def confirm_payment(request):
     data = request.data
+    print("-----debug-----")
+    print(request.session.items())
     payment_intent_id = data.get("payment_intent_id")
 
     if not payment_intent_id:
         return Response({"error": "payment_intent_id is required"}, status.HTTP_400_BAD_REQUEST)
 
     try:
-        intent = stripe.PaymentIntent.retrieve(payment_intent_id)
-        
-        if intent.status != "succeeded":
-            return Response({"error": f"Payment status is {intent.status}"}, status.HTTP_400_BAD_REQUEST)
-
-        if PaymentInfo.objects.filter(stripe_payment_intent_id=payment_intent_id).exists():
-            return Response({"message": "Payment already processed"}, status.HTTP_200_OK)
-
-        test_kit_id = intent.metadata.get("test_kit_id")
-        client_id = intent.metadata.get("client_id")
-        quantity = int(intent.metadata.get("quantity", 1))
-
-        if not test_kit_id or not client_id:
-             return Response({"error": "Missing metadata in payment intent"}, status.HTTP_400_BAD_REQUEST)
-
+        client_id = request.session.get("client_id")
+        test_kit_id = data.get("test_kit_id")
+        quantity = int(data.get("quantity", 1))
         client = Client.objects.get(pk=client_id)
         kit = TestKit.objects.get(pk=test_kit_id)
-
+        print(f"-----debug confirm_payment for client_id={client_id}, test_kit_id={test_kit_id}, quantity={quantity} -----")
         card_brand = "Card"
         card_last_four = "0000"
-        
-        if intent.charges and intent.charges.data:
-            charge = intent.charges.data[0]
-            if charge.payment_method_details and charge.payment_method_details.card:
-                card = charge.payment_method_details.card
-                card_brand = card.brand
-                card_last_four = card.last4
+        if payment_intent_id != "free_order":
+            intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+            
+            if intent.status != "succeeded":
+                return Response({"error": f"Payment status is {intent.status}"}, status.HTTP_400_BAD_REQUEST)
+
+            if PaymentInfo.objects.filter(stripe_payment_intent_id=payment_intent_id).exists():
+                return Response({"message": "Payment already processed"}, status.HTTP_200_OK)
+
+            test_kit_id = intent.metadata.get("test_kit_id")
+            client_id = intent.metadata.get("client_id")
+            quantity = int(intent.metadata.get("quantity", 1))
+
+            if not test_kit_id or not client_id:
+                # fallback: try to use authenticated user's client if metadata missing
+                if request.user and request.user.is_authenticated:
+                    try:
+                        client = Client.objects.get(user=request.user)
+                        client_id = client.id
+                    except Client.DoesNotExist:
+                        return Response({"error": "Missing metadata in payment intent and no linked client for authenticated user"}, status.HTTP_400_BAD_REQUEST)
+                else:
+                    return Response({"error": "Missing metadata in payment intent"}, status.HTTP_400_BAD_REQUEST)
+
+            
+            
+            if intent.charges and intent.charges.data:
+                charge = intent.charges.data[0]
+                if charge.payment_method_details and charge.payment_method_details.card:
+                    card = charge.payment_method_details.card
+                    card_brand = card.brand
+                    card_last_four = card.last4
 
         # Calculate total amount based on quantity and pricing tiers
         total_amount = kit.get_price_for_quantity(quantity)
-
+        
         payment = PaymentInfo.objects.create(
             client=client,
             cardholder_name=data.get("cardholder_name", ""),
@@ -935,6 +971,8 @@ def confirm_payment(request):
         # Create dietitian commission if this client was referred by a provider
         if client.referred_by and client.referred_by.type == "PROVIDER":
             unit_price = float(kit.price)
+            print("----- debug- -----")
+            print(kit.commission_percent)
             DietitianCommission.objects.create(
                 provider=client.referred_by,
                 order=order,
@@ -943,6 +981,7 @@ def confirm_payment(request):
                 commission_percent=kit.commission_percent,
                 status="PENDING",
             )
+        print("-----debug-----")
 
         purchase = Purchase.objects.create(
             client=client,

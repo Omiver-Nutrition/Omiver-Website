@@ -34,9 +34,10 @@ DEBUG = True
 
 ALLOWED_HOSTS = ["*"]
 
-CSRF_TRUSTED_ORIGINS = ["https://*.127.0.0.1","https://www.omiver.me"]
+CSRF_TRUSTED_ORIGINS = ["https://*.127.0.0.1","https://www.omiver.me", "http://localhost:3000", "http://localhost:5173"]
 
 CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
 
 # Application definition
 

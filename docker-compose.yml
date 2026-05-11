@@ -45,10 +45,12 @@ services:
     image: caddy:alpine
     container_name: omiver_caddy
     ports:
-      - "80:80"
-      - "443:443"
+      - "${CADDY_HTTP_PORT:-8080}:80"
+      - "${CADDY_HTTPS_PORT:-8443}:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./caddy_data:/data        # Persists certificates and keys
+      - ./caddy_config:/config    # Persists autosaved configurations
       - static_files:/srv/static:ro
     depends_on:
       - web

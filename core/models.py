@@ -2,6 +2,7 @@ from django.db import models
 from django.utils import timezone
 from datetime import datetime, timedelta
 import uuid
+from decimal import Decimal
 
 
 class Biomarker(models.Model):
@@ -187,7 +188,7 @@ class TestKit(models.Model):
     def __str__(self):
         return f"{self.name} ({self.biomarker_count} biomarkers)"
     
-    def get_price_for_quantity(self, quantity):
+    def get_price_for_quantity(self, quantity: int) -> Decimal:
         """Calculate the final price for a given quantity based on volume tiers."""
         from django.db.models import Q
         
@@ -200,14 +201,12 @@ class TestKit(models.Model):
         ).filter(
             Q(max_quantity__isnull=True) | Q(max_quantity__gte=quantity)
         ).order_by("-min_quantity").first()
-        
         if tier:
-            discount_multiplier = (100 - tier.discount_percent) / 100
-            unit_price = float(self.price) * float(discount_multiplier)
+            discount_multiplier = (Decimal("100") - tier.discount_percent) / Decimal("100")
+            unit_price = self.price * discount_multiplier
         else:
-            unit_price = float(self.price)
-        
-        return quantity * unit_price
+            unit_price = self.price
+        return unit_price * quantity
 
 
 class Order(models.Model):
@@ -431,7 +430,7 @@ class DietitianCommission(models.Model):
     provider = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="earned_commissions", help_text="Provider/Dietitian who earned the commission")
     order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name="commission", help_text="Order that triggered the commission")
     kit_quantity = models.PositiveIntegerField(default=1, help_text="Number of kits in the order")
-    kit_price = models.DecimalField(max_digits=10, decimal_places=2, help_text="Price per kit at time of order")
+    kit_price = models.FloatField(help_text="Price per kit at time of order")
     commission_percent = models.DecimalField(max_digits=5, decimal_places=2, default=10, help_text="Commission percentage (e.g., 10 for 10%)")
     commission_amount = models.DecimalField(max_digits=10, decimal_places=2, help_text="Calculated commission amount (kit_price * kit_quantity * commission_percent / 100)")
     status = models.CharField(max_length=20, choices=COMMISSION_STATUS_CHOICES, default="PENDING")
@@ -445,7 +444,8 @@ class DietitianCommission(models.Model):
     def save(self, *args, **kwargs):
         """Auto-calculate commission amount if not already set."""
         if not self.commission_amount:
-            self.commission_amount = (
-                (self.kit_price * self.kit_quantity * self.commission_percent) / 100
-            )
+            kit_price = Decimal(str(self.kit_price))
+            kit_quantity = Decimal(self.kit_quantity)
+            commission_percent = Decimal(str(self.commission_percent))
+            self.commission_amount = (kit_price * kit_quantity * commission_percent) / Decimal("100")
         super().save(*args, **kwargs)
