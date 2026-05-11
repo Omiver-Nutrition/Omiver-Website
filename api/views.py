@@ -878,8 +878,6 @@ def create_payment_intent(request):
 @permission_classes([IsAuthenticated])
 def confirm_payment(request):
     data = request.data
-    print("-----debug-----")
-    print(request.session.items())
     payment_intent_id = data.get("payment_intent_id")
 
     if not payment_intent_id:
@@ -889,11 +887,10 @@ def confirm_payment(request):
         client_id = request.session.get("client_id")
         test_kit_id = data.get("test_kit_id")
         quantity = int(data.get("quantity", 1))
-        client = Client.objects.get(pk=client_id)
-        kit = TestKit.objects.get(pk=test_kit_id)
-        print(f"-----debug confirm_payment for client_id={client_id}, test_kit_id={test_kit_id}, quantity={quantity} -----")
+
         card_brand = "Card"
         card_last_four = "0000"
+
         if payment_intent_id != "free_order":
             intent = stripe.PaymentIntent.retrieve(payment_intent_id)
             
@@ -903,8 +900,8 @@ def confirm_payment(request):
             if PaymentInfo.objects.filter(stripe_payment_intent_id=payment_intent_id).exists():
                 return Response({"message": "Payment already processed"}, status.HTTP_200_OK)
 
-            test_kit_id = intent.metadata.get("test_kit_id")
-            client_id = intent.metadata.get("client_id")
+            test_kit_id = intent.metadata.get("test_kit_id") or test_kit_id
+            client_id = intent.metadata.get("client_id") or client_id
             quantity = int(intent.metadata.get("quantity", 1))
 
             if not test_kit_id or not client_id:
@@ -918,8 +915,6 @@ def confirm_payment(request):
                 else:
                     return Response({"error": "Missing metadata in payment intent"}, status.HTTP_400_BAD_REQUEST)
 
-            
-            
             if intent.charges and intent.charges.data:
                 charge = intent.charges.data[0]
                 if charge.payment_method_details and charge.payment_method_details.card:
@@ -927,9 +922,24 @@ def confirm_payment(request):
                     card_brand = card.brand
                     card_last_four = card.last4
 
+        if not client_id and request.user and request.user.is_authenticated:
+            try:
+                client = Client.objects.get(user=request.user)
+                client_id = client.id
+            except Client.DoesNotExist:
+                return Response({"error": "No linked client for authenticated user"}, status.HTTP_400_BAD_REQUEST)
+
+        if not client_id:
+            return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
+        if not test_kit_id:
+            return Response({"error": "test_kit_id is required"}, status.HTTP_400_BAD_REQUEST)
+
+        client = Client.objects.get(pk=client_id)
+        kit = TestKit.objects.get(pk=test_kit_id)
+
         # Calculate total amount based on quantity and pricing tiers
         total_amount = kit.get_price_for_quantity(quantity)
-        
+
         payment = PaymentInfo.objects.create(
             client=client,
             cardholder_name=data.get("cardholder_name", ""),
@@ -970,9 +980,7 @@ def confirm_payment(request):
 
         # Create dietitian commission if this client was referred by a provider
         if client.referred_by and client.referred_by.type == "PROVIDER":
-            unit_price = float(kit.price)
-            print("----- debug- -----")
-            print(kit.commission_percent)
+            unit_price = kit.price
             DietitianCommission.objects.create(
                 provider=client.referred_by,
                 order=order,
