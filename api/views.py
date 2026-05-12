@@ -28,13 +28,13 @@ from .serializer import (
     BiomarkerSerializer, BiomarkerResultSerializer,
     BiomarkerTestSerializer, BiomarkerTestDetailSerializer,
     ClientPaymentHistorySerializer, ProviderPatientSerializer,
-    DietitianCommissionSerializer, PricingTierSerializer,
+    PricingTierSerializer,
 )
 from core.models import (
     MealPlan, Client, TestKit, Order, DeliveryEvent,
     PaymentInfo, BillingAddress, Purchase,
     Biomarker, BiomarkerTest, BiomarkerResult,
-    Membership, Recommendation, DietitianCommission, PricingTier,
+    Membership, Recommendation, PricingTier,
 )
 from collections import defaultdict
 from datetime import date
@@ -298,79 +298,6 @@ def get_provider_patients(request):
         .order_by("-created_at")
     )
     return Response(ProviderPatientSerializer(patients, many=True).data, status.HTTP_200_OK)
-
-
-@extend_schema(
-    summary="Get provider earned commissions",
-    description="Returns all commissions earned by a provider from referred patients' kit orders.",
-    parameters=[
-        OpenApiParameter(name="client_id", type=int, required=True, description="Provider's client ID"),
-        OpenApiParameter(name="status", type=str, required=False, description="Filter by commission status (PENDING, APPROVED, PAID, FAILED)"),
-    ],
-    responses={200: DietitianCommissionSerializer(many=True)},
-    tags=["Provider"],
-)
-@api_view(["GET"])
-def get_provider_commissions(request):
-    """Return all commissions earned by a provider."""
-    client_id = request.GET.get("client_id")
-    status_filter = request.GET.get("status")
-    
-    if not client_id:
-        return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        provider = Client.objects.get(pk=client_id, type="PROVIDER")
-    except Client.DoesNotExist:
-        return Response({"error": "Provider not found"}, status.HTTP_404_NOT_FOUND)
-    
-    commissions = DietitianCommission.objects.filter(provider=provider).select_related("order")
-    
-    if status_filter:
-        commissions = commissions.filter(status=status_filter)
-    
-    commissions = commissions.order_by("-created_at")
-    return Response(DietitianCommissionSerializer(commissions, many=True).data, status.HTTP_200_OK)
-
-
-@extend_schema(
-    summary="Get commission summary for provider",
-    description="Returns total earned, pending, and paid commissions for a provider.",
-    parameters=[
-        OpenApiParameter(name="client_id", type=int, required=True, description="Provider's client ID"),
-    ],
-    responses={200: None},
-    tags=["Provider"],
-)
-@api_view(["GET"])
-def get_commission_summary(request):
-    """Return commission summary for a provider."""
-    client_id = request.GET.get("client_id")
-    
-    if not client_id:
-        return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        provider = Client.objects.get(pk=client_id, type="PROVIDER")
-    except Client.DoesNotExist:
-        return Response({"error": "Provider not found"}, status.HTTP_404_NOT_FOUND)
-    
-    commissions = DietitianCommission.objects.filter(provider=provider)
-    
-    total_earned = sum(float(c.commission_amount) for c in commissions)
-    pending = sum(float(c.commission_amount) for c in commissions.filter(status="PENDING"))
-    approved = sum(float(c.commission_amount) for c in commissions.filter(status="APPROVED"))
-    paid = sum(float(c.commission_amount) for c in commissions.filter(status="PAID"))
-    
-    return Response({
-        "provider_id": provider.id,
-        "provider_name": f"{provider.first_name} {provider.last_name}".strip() or provider.email,
-        "total_earned": total_earned,
-        "pending": pending,
-        "approved": approved,
-        "paid": paid,
-        "commission_count": commissions.count(),
-    }, status.HTTP_200_OK)
 
 
 @extend_schema(
@@ -978,17 +905,6 @@ def confirm_payment(request):
             is_completed=True,
         )
 
-        # Create dietitian commission if this client was referred by a provider
-        if client.referred_by and client.referred_by.type == "PROVIDER":
-            unit_price = kit.price
-            DietitianCommission.objects.create(
-                provider=client.referred_by,
-                order=order,
-                kit_quantity=quantity,
-                kit_price=unit_price,
-                commission_percent=kit.commission_percent,
-                status="PENDING",
-            )
         print("-----debug-----")
 
         purchase = Purchase.objects.create(
@@ -1451,97 +1367,5 @@ def client_memberships(request):
     return Response(data)
 
 
-@extend_schema(
-    summary="Approve pending commission",
-    description="Mark a pending commission as approved (ready for payout processing).",
-    parameters=[
-        OpenApiParameter(name="commission_id", type=int, required=True, description="Commission ID"),
-    ],
-    responses={200: DietitianCommissionSerializer},
-    tags=["Provider"],
-)
-@api_view(["PATCH"])
-def approve_commission(request):
-    """Approve a pending commission for payment processing."""
-    commission_id = request.GET.get("commission_id")
-    
-    if not commission_id:
-        return Response({"error": "commission_id is required"}, status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        commission = DietitianCommission.objects.get(pk=commission_id)
-    except DietitianCommission.DoesNotExist:
-        return Response({"error": "Commission not found"}, status.HTTP_404_NOT_FOUND)
-    
-    if commission.status != "PENDING":
-        return Response(
-            {"error": f"Cannot approve commission with status {commission.status}"},
-            status.HTTP_400_BAD_REQUEST
-        )
-    
-    commission.status = "APPROVED"
-    commission.save()
-    return Response(DietitianCommissionSerializer(commission).data, status.HTTP_200_OK)
 
 
-@extend_schema(
-    summary="Process commission payout",
-    description="Process a Stripe payout for an approved commission. Requires provider's Stripe connected account.",
-    request=inline_serializer(
-        name="ProcessCommissionRequest",
-        fields={
-            "commission_id": serializers.IntegerField(),
-            "stripe_account_id": serializers.CharField(required=False, help_text="Provider's Stripe connected account ID"),
-        },
-    ),
-    responses={200: DietitianCommissionSerializer},
-    tags=["Provider"],
-)
-@api_view(["POST"])
-def process_commission_payout(request):
-    """Process payout for an approved commission via Stripe transfer."""
-    data = request.data
-    commission_id = data.get("commission_id")
-    stripe_account_id = data.get("stripe_account_id")
-    
-    if not commission_id:
-        return Response({"error": "commission_id is required"}, status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        commission = DietitianCommission.objects.get(pk=commission_id)
-    except DietitianCommission.DoesNotExist:
-        return Response({"error": "Commission not found"}, status.HTTP_404_NOT_FOUND)
-    
-    if commission.status != "APPROVED":
-        return Response(
-            {"error": f"Cannot process commission with status {commission.status}. Must be APPROVED."},
-            status.HTTP_400_BAD_REQUEST
-        )
-    
-    try:
-        # Create Stripe transfer to connected account (if account provided)
-        if stripe_account_id:
-            transfer = stripe.Transfer.create(
-                amount=int(commission.commission_amount * 100),
-                currency="usd",
-                destination=stripe_account_id,
-                description=f"Commission for order {commission.order.order_number}",
-            )
-            commission.stripe_transfer_id = transfer.id
-        
-        commission.status = "PAID"
-        commission.paid_at = timezone.now()
-        commission.save()
-        
-        return Response(DietitianCommissionSerializer(commission).data, status.HTTP_200_OK)
-    
-    except stripe.error.StripeError as e:
-        return Response(
-            {"error": f"Stripe error: {str(e)}"},
-            status.HTTP_400_BAD_REQUEST
-        )
-    except Exception as e:
-        return Response(
-            {"error": str(e)},
-            status.HTTP_500_INTERNAL_SERVER_ERROR
-        )

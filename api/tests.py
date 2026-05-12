@@ -16,7 +16,6 @@ from core.models import (
 	BiomarkerTest,
 	BillingAddress,
 	Client,
-	DietitianCommission,
 	DeliveryEvent,
 	Membership,
 	MealPlan,
@@ -78,14 +77,12 @@ class ApiSmokeTests(TestCase):
 			biomarker_count=120,
 			description="Starter",
 			price=Decimal("99.00"),
-			commission_percent=Decimal("10.00"),
 		)
 		self.premium_kit = TestKit.objects.create(
 			name="Premium Kit",
 			biomarker_count=240,
 			description="Premium",
 			price=Decimal("149.00"),
-			commission_percent=Decimal("12.50"),
 		)
 
 		self.tier = PricingTier.objects.create(
@@ -207,23 +204,6 @@ class ApiSmokeTests(TestCase):
 			membership_type=1,
 			start_date=timezone.now() - timedelta(days=1),
 			end_date=timezone.now() + timedelta(days=1),
-		)
-
-		self.pending_commission = DietitianCommission.objects.create(
-			provider=self.provider,
-			order=self.provider_order_pending,
-			kit_quantity=2,
-			kit_price=self.kit.price,
-			commission_percent=self.kit.commission_percent,
-			status="PENDING",
-		)
-		self.approved_commission = DietitianCommission.objects.create(
-			provider=self.provider,
-			order=self.provider_order_approved,
-			kit_quantity=1,
-			kit_price=self.kit.price,
-			commission_percent=self.kit.commission_percent,
-			status="APPROVED",
 		)
 
 	def test_index_returns_welcome_message(self):

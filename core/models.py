@@ -181,7 +181,7 @@ class TestKit(models.Model):
     biomarker_count = models.PositiveIntegerField(default=0)
     description = models.TextField(blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    commission_percent = models.DecimalField(max_digits=5, decimal_places=2, default=10, help_text="Commission percentage for providers/dietitians (e.g., 10 for 10%)")
+    active = models.BooleanField(default=True, help_text="Whether this test kit is currently active and available for ordering")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -416,36 +416,3 @@ class PricingTier(models.Model):
         return f"{self.test_kit.name}: {self.min_quantity} {max_qty} kits = {self.discount_percent}% off"
 
 
-class DietitianCommission(models.Model):
-    """Tracks commissions earned by dietitians on kit sales."""
-
-    COMMISSION_STATUS_CHOICES = [
-        ("PENDING", "Pending"),
-        ("APPROVED", "Approved"),
-        ("PAID", "Paid"),
-        ("FAILED", "Failed"),
-    ]
-
-    id = models.AutoField(primary_key=True)
-    provider = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="earned_commissions", help_text="Provider/Dietitian who earned the commission")
-    order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name="commission", help_text="Order that triggered the commission")
-    kit_quantity = models.PositiveIntegerField(default=1, help_text="Number of kits in the order")
-    kit_price = models.FloatField(help_text="Price per kit at time of order")
-    commission_percent = models.DecimalField(max_digits=5, decimal_places=2, default=10, help_text="Commission percentage (e.g., 10 for 10%)")
-    commission_amount = models.DecimalField(max_digits=10, decimal_places=2, help_text="Calculated commission amount (kit_price * kit_quantity * commission_percent / 100)")
-    status = models.CharField(max_length=20, choices=COMMISSION_STATUS_CHOICES, default="PENDING")
-    stripe_transfer_id = models.CharField(max_length=255, blank=True, null=True, help_text="Stripe transfer ID when payment is sent")
-    created_at = models.DateTimeField(auto_now_add=True)
-    paid_at = models.DateTimeField(null=True, blank=True, help_text="When the commission was paid out")
-
-    def __str__(self):
-        return f"Commission for {self.provider.first_name} – ${self.commission_amount} ({self.status})"
-
-    def save(self, *args, **kwargs):
-        """Auto-calculate commission amount if not already set."""
-        if not self.commission_amount:
-            kit_price = Decimal(str(self.kit_price))
-            kit_quantity = Decimal(self.kit_quantity)
-            commission_percent = Decimal(str(self.commission_percent))
-            self.commission_amount = (kit_price * kit_quantity * commission_percent) / Decimal("100")
-        super().save(*args, **kwargs)
