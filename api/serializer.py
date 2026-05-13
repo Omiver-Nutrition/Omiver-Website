@@ -66,7 +66,7 @@ class MealPlanSerializer(serializers.ModelSerializer):
 class TestKitSerializer(serializers.ModelSerializer):
     class Meta:
         model = TestKit
-        fields = ["id", "name", "biomarker_count", "description", "price"]
+        fields = "__all__"
 
 
 class DeliveryEventSerializer(serializers.ModelSerializer):

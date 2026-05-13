@@ -397,6 +397,25 @@ def logout_handler(request):
 
 
 @extend_schema(
+    summary="Verify authentication token",
+    description="Verify if the provided authentication token is valid.",
+    responses={200: inline_serializer(
+        name="VerifyTokenResponse",
+        fields={"valid": serializers.BooleanField()},
+    )},
+    tags=["Auth"],
+)
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def verify_token_handler(request):
+    """
+    Verify if the user's authentication token is still valid.
+    Returns 200 OK if token is valid, 401 if invalid.
+    """
+    return Response({"valid": True}, status.HTTP_200_OK)
+
+
+@extend_schema(
     summary="Check email availability",
     description="Check whether a username (email) is already registered.",
     parameters=[

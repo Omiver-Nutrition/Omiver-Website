@@ -19,6 +19,7 @@ urlpatterns = [
     path("validate_referral_code", views.validate_referral_code, name="validate_referral_code"),
     path("login", views.login_handler, name="login"),
     path("logout", views.logout_handler, name="logout"),
+    path("verify-token", views.verify_token_handler, name="verify_token"),
     # test kits
     path("kits", views.list_kits, name="list_kits"),
     # orders & shipping tracking
