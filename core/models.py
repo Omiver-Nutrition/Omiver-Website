@@ -173,6 +173,32 @@ class ShippingInfo(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
 
+class DietLog(models.Model):
+    id = models.AutoField(primary_key=True)
+    client = models.ForeignKey("Client", on_delete=models.CASCADE, related_name="diet_logs")
+    recall = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Diet log for {self.client} at {self.created_at}"
+
+
+class ExerciseLog(models.Model):
+    id = models.AutoField(primary_key=True)
+    client = models.ForeignKey("Client", on_delete=models.CASCADE, related_name="exercise_logs")
+    recall = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Exercise log for {self.client} at {self.created_at}"
+
+
 class TestKit(models.Model):
     """Catalog of available test kits (e.g. Premium Test – 650 biomarkers)."""
 
@@ -289,7 +315,8 @@ class Client(models.Model):
     dietary_preferences = models.TextField(max_length=100, blank=True)
     allergies = models.TextField(max_length=100, blank=True)
     dietary_recall = models.TextField(blank=True)
-    dietary_typicality = models.PositiveSmallIntegerField(null=True, blank=True, help_text="How typical the 24-hour recall is on a 1-10 scale")
+    exercise_recall = models.TextField(blank=True)
+    dietary_typicality = models.PositiveSmallIntegerField(null=True, blank=True, help_text="How typical the 24-hour recall is on a 5-level scale from unusual to always")
     dietary_preference_mode = models.CharField(max_length=20, blank=True, help_text="Whether the client wants similar or different recommendations")
     preferred_cuisines = models.TextField(blank=True)
     avoided_cuisines = models.TextField(blank=True)

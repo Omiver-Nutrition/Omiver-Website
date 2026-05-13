@@ -1,6 +1,8 @@
 from django.contrib import admin
+from django.db import transaction
 from .models import (
     TestKit, Order, DeliveryEvent, PaymentInfo, BillingAddress, Purchase,
+    DietLog, ExerciseLog,
     Biomarker, BiomarkerTest, BiomarkerResult,
 )
 
@@ -27,12 +29,123 @@ class OrderAdmin(admin.ModelAdmin):
     list_filter = ("status",)
     search_fields = ("order_number", "tracking_number")
     inlines = [DeliveryEventInline]
+    actions = [
+        "mark_as_confirmed",
+        "mark_as_shipped",
+        "mark_as_in_transit",
+        "mark_as_out_for_delivery",
+        "mark_as_delivered",
+        "mark_as_cancelled",
+    ]
+
+    def _set_status_with_event(self, request, queryset, status, title, description, event_type=None, completed=False):
+        event_type = event_type or status
+        updated = 0
+
+        with transaction.atomic():
+            for order in queryset:
+                order.status = status
+                order.save(update_fields=["status", "updated_at"])
+
+                DeliveryEvent.objects.create(
+                    order=order,
+                    event_type=event_type,
+                    title=title,
+                    description=description,
+                    is_completed=completed,
+                )
+                order.delivery_events.exclude(event_type=event_type).update(is_completed=True)
+                updated += 1
+
+        self.message_user(request, f"Updated {updated} order(s) to {title.lower()}.")
+
+    @admin.action(description="Mark selected orders as confirmed")
+    def mark_as_confirmed(self, request, queryset):
+        self._set_status_with_event(
+            request,
+            queryset,
+            "CONFIRMED",
+            "Order Confirmed",
+            "Your order has been confirmed",
+            event_type="ORDER_PLACED",
+            completed=True,
+        )
+
+    @admin.action(description="Mark selected orders as shipped")
+    def mark_as_shipped(self, request, queryset):
+        self._set_status_with_event(
+            request,
+            queryset,
+            "SHIPPED",
+            "Shipped",
+            "Your order has shipped",
+            completed=True,
+        )
+
+    @admin.action(description="Mark selected orders as in transit")
+    def mark_as_in_transit(self, request, queryset):
+        self._set_status_with_event(
+            request,
+            queryset,
+            "IN_TRANSIT",
+            "In Transit",
+            "Your order is in transit",
+            completed=True,
+        )
+
+    @admin.action(description="Mark selected orders as out for delivery")
+    def mark_as_out_for_delivery(self, request, queryset):
+        self._set_status_with_event(
+            request,
+            queryset,
+            "OUT_FOR_DELIVERY",
+            "Out for Delivery",
+            "Your order is out for delivery",
+            completed=True,
+        )
+
+    @admin.action(description="Mark selected orders as delivered")
+    def mark_as_delivered(self, request, queryset):
+        self._set_status_with_event(
+            request,
+            queryset,
+            "DELIVERED",
+            "Delivered",
+            "Your order has been delivered",
+            completed=True,
+        )
+
+    @admin.action(description="Mark selected orders as cancelled")
+    def mark_as_cancelled(self, request, queryset):
+        self._set_status_with_event(
+            request,
+            queryset,
+            "CANCELLED",
+            "Order Cancelled",
+            "Your order has been cancelled",
+            event_type="ORDER_PLACED",
+            completed=False,
+        )
 
 
 @admin.register(DeliveryEvent)
 class DeliveryEventAdmin(admin.ModelAdmin):
     list_display = ("order", "event_type", "title", "is_completed", "timestamp")
     list_filter = ("event_type", "is_completed")
+
+
+@admin.register(DietLog)
+class DietLogAdmin(admin.ModelAdmin):
+    list_display = ("client", "created_at")
+    list_filter = ("created_at",)
+    search_fields = ("client__email", "client__first_name", "client__last_name")
+
+
+@admin.register(ExerciseLog)
+class ExerciseLogAdmin(admin.ModelAdmin):
+    list_display = ("client", "created_at")
+    list_filter = ("created_at",)
+    search_fields = ("client__email", "client__first_name", "client__last_name")
 
 
 @admin.register(PaymentInfo)

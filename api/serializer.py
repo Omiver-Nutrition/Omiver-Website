@@ -9,6 +9,33 @@ class ClientSerializer(serializers.ModelSerializer):
     # Write-only: accept a provider's referral code when a patient registers.
     referred_by_code = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
+    def _store_recall_logs(self, instance, dietary_recall=None, exercise_recall=None):
+        if dietary_recall is not None and str(dietary_recall).strip():
+            DietLog.objects.create(client=instance, recall=str(dietary_recall).strip())
+        if exercise_recall is not None and str(exercise_recall).strip():
+            ExerciseLog.objects.create(client=instance, recall=str(exercise_recall).strip())
+
+    def _clear_legacy_recall_fields(self, instance):
+        updated_fields = []
+        if hasattr(instance, "dietary_recall"):
+            instance.dietary_recall = ""
+            updated_fields.append("dietary_recall")
+        if hasattr(instance, "exercise_recall"):
+            instance.exercise_recall = ""
+            updated_fields.append("exercise_recall")
+        if updated_fields:
+            instance.save(update_fields=updated_fields)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        latest_diet_log = instance.diet_logs.first()
+        latest_exercise_log = instance.exercise_logs.first()
+        data["dietary_recall"] = latest_diet_log.recall if latest_diet_log else ""
+        data["exercise_recall"] = latest_exercise_log.recall if latest_exercise_log else ""
+        data["dietary_recall_created_at"] = latest_diet_log.created_at if latest_diet_log else None
+        data["exercise_recall_created_at"] = latest_exercise_log.created_at if latest_exercise_log else None
+        return data
+
     class Meta:
         model = Client
         fields = [
@@ -25,6 +52,7 @@ class ClientSerializer(serializers.ModelSerializer):
             "ethnicity",
             "allergies",
             "dietary_recall",
+            "exercise_recall",
             "dietary_typicality",
             "dietary_preference_mode",
             "preferred_cuisines",
@@ -47,7 +75,11 @@ class ClientSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         referred_by_code = validated_data.pop("referred_by_code", None)
+        dietary_recall = validated_data.pop("dietary_recall", None)
+        exercise_recall = validated_data.pop("exercise_recall", None)
         instance = super().create(validated_data)
+        self._clear_legacy_recall_fields(instance)
+        self._store_recall_logs(instance, dietary_recall=dietary_recall, exercise_recall=exercise_recall)
         if referred_by_code:
             try:
                 provider = Client.objects.get(referral_code=referred_by_code.upper())
@@ -55,6 +87,14 @@ class ClientSerializer(serializers.ModelSerializer):
                 instance.save()
             except Client.DoesNotExist:
                 pass  # Invalid code — silently ignore
+        return instance
+
+    def update(self, instance, validated_data):
+        dietary_recall = validated_data.pop("dietary_recall", None)
+        exercise_recall = validated_data.pop("exercise_recall", None)
+        instance = super().update(instance, validated_data)
+        self._clear_legacy_recall_fields(instance)
+        self._store_recall_logs(instance, dietary_recall=dietary_recall, exercise_recall=exercise_recall)
         return instance
 
 class MealPlanSerializer(serializers.ModelSerializer):
@@ -230,6 +270,16 @@ class ProviderPatientSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
     latest_test_date = serializers.SerializerMethodField()
     total_orders = serializers.SerializerMethodField()
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        latest_diet_log = instance.diet_logs.first()
+        latest_exercise_log = instance.exercise_logs.first()
+        data["dietary_recall"] = latest_diet_log.recall if latest_diet_log else ""
+        data["exercise_recall"] = latest_exercise_log.recall if latest_exercise_log else ""
+        data["dietary_recall_created_at"] = latest_diet_log.created_at if latest_diet_log else None
+        data["exercise_recall_created_at"] = latest_exercise_log.created_at if latest_exercise_log else None
+        return data
 
     class Meta:
         model = Client

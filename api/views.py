@@ -183,6 +183,7 @@ def create_client_helper(data):
             "height": serializers.FloatField(required=False),
             "weight": serializers.FloatField(required=False),
             "dietary_recall": serializers.CharField(required=False),
+            "exercise_recall": serializers.CharField(required=False),
             "dietary_typicality": serializers.IntegerField(required=False),
             "dietary_preference_mode": serializers.CharField(required=False),
             "preferred_cuisines": serializers.CharField(required=False),
@@ -406,6 +407,7 @@ def get_all_pricing_tiers(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def login_handler(request):
+    print(request)
     data = request.data
     user = authenticate(**data)
     if user is None:
@@ -702,6 +704,7 @@ def order_detail(request, pk):
             "status": serializers.ChoiceField(choices=[c[0] for c in Order.STATUS_CHOICES]),
             "title": serializers.CharField(required=False),
             "description": serializers.CharField(required=False),
+            "tracking_number": serializers.CharField(required=False, allow_blank=True),
         },
     ),
     responses={200: OrderDetailSerializer},
@@ -719,7 +722,11 @@ def update_order_status(request, pk):
     if new_status not in dict(Order.STATUS_CHOICES):
         return Response({"error": "Invalid status"}, status.HTTP_400_BAD_REQUEST)
 
+    tracking_number = request.data.get("tracking_number", "").strip()
+
     order.status = new_status
+    if tracking_number:
+        order.tracking_number = tracking_number
     order.save()
 
     # Create delivery event

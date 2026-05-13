@@ -15,6 +15,8 @@ from core.models import (
 	BiomarkerResult,
 	BiomarkerTest,
 	BillingAddress,
+	DietLog,
+	ExerciseLog,
 	Client,
 	DeliveryEvent,
 	Membership,
@@ -243,6 +245,21 @@ class ApiSmokeTests(TestCase):
 		self.patient.refresh_from_db()
 		self.assertEqual(self.patient.first_name, "Updated")
 
+	def test_client_handler_patch_creates_recall_logs(self):
+		response = self.api_client.patch(
+			reverse("client_handler", args=[self.patient.id]),
+			{"dietary_recall": "Eggs and toast", "exercise_recall": "30 minutes walking"},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(DietLog.objects.filter(client=self.patient).count(), 1)
+		self.assertEqual(ExerciseLog.objects.filter(client=self.patient).count(), 1)
+		self.assertEqual(DietLog.objects.filter(client=self.patient).first().recall, "Eggs and toast")
+		self.assertEqual(ExerciseLog.objects.filter(client=self.patient).first().recall, "30 minutes walking")
+		self.assertEqual(response.data["dietary_recall"], "Eggs and toast")
+		self.assertEqual(response.data["exercise_recall"], "30 minutes walking")
+
 	def test_register_creates_auth_user_and_client(self):
 		payload = {
 			"username": "new-user@example.com",
@@ -260,6 +277,26 @@ class ApiSmokeTests(TestCase):
 		created_client = Client.objects.get(email="new-user@example.com")
 		self.assertEqual(created_client.referred_by, self.provider)
 		self.assertEqual(created_client.user, created_user)
+
+	def test_register_creates_recall_logs(self):
+		payload = {
+			"username": "recall-user@example.com",
+			"password": "secret123",
+			"email": "recall-user@example.com",
+			"first_name": "Recall",
+			"last_name": "User",
+			"type": "INDIVIDUAL",
+			"dietary_recall": "Oatmeal and berries",
+			"exercise_recall": "Morning run and stretching",
+		}
+		response = self.public_client.post(reverse("register"), payload, format="json")
+
+		self.assertEqual(response.status_code, 201)
+		created_client = Client.objects.get(email="recall-user@example.com")
+		self.assertEqual(DietLog.objects.filter(client=created_client).count(), 1)
+		self.assertEqual(ExerciseLog.objects.filter(client=created_client).count(), 1)
+		self.assertEqual(DietLog.objects.filter(client=created_client).first().recall, "Oatmeal and berries")
+		self.assertEqual(ExerciseLog.objects.filter(client=created_client).first().recall, "Morning run and stretching")
 
 	def test_check_email_reports_existing_username(self):
 		response = self.public_client.get(reverse("check_email"), {"email": self.login_user.username})
@@ -423,6 +460,24 @@ class ApiSmokeTests(TestCase):
 		self.assertEqual(response.status_code, 200)
 		self.order.refresh_from_db()
 		self.assertEqual(self.order.status, "SHIPPED")
+		self.assertTrue(self.order.delivery_events.filter(event_type="SHIPPED").exists())
+
+	def test_update_order_status_persists_tracking_number(self):
+		response = self.api_client.patch(
+			reverse("update_order_status", args=[self.order.id]),
+			{
+				"status": "SHIPPED",
+				"title": "Shipped",
+				"description": "Your kit left the warehouse",
+				"tracking_number": "TRK-9999",
+			},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.order.refresh_from_db()
+		self.assertEqual(self.order.status, "SHIPPED")
+		self.assertEqual(self.order.tracking_number, "TRK-9999")
 		self.assertTrue(self.order.delivery_events.filter(event_type="SHIPPED").exists())
 
 	def test_track_order_finds_by_tracking_number(self):
