@@ -279,6 +279,27 @@ class ApiSmokeTests(TestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertFalse(response.data["isValid"])
 
+	def test_verify_kit_code_reports_valid_order_number(self):
+		response = self.public_client.get(reverse("verify_kit_code"), {"code": self.order.order_number})
+
+		self.assertEqual(response.status_code, 200)
+		self.assertTrue(response.data["valid"])
+		self.assertEqual(response.data["message"], "Kit code verified successfully")
+
+	def test_verify_kit_code_reports_invalid_order_number(self):
+		response = self.public_client.get(reverse("verify_kit_code"), {"code": "NOTREAL"})
+
+		self.assertEqual(response.status_code, 400)
+		self.assertFalse(response.data["valid"])
+		self.assertEqual(response.data["message"], "Kit code not found in the system")
+
+	def test_verify_kit_code_requires_code_query_param(self):
+		response = self.public_client.get(reverse("verify_kit_code"))
+
+		self.assertEqual(response.status_code, 400)
+		self.assertFalse(response.data["valid"])
+		self.assertEqual(response.data["message"], "Kit code is required")
+
 	def test_login_handler_returns_client_data(self):
 		response = self.public_client.post(
 			reverse("login"),

@@ -46,6 +46,57 @@ def index(request):
 
 
 @extend_schema(
+    summary="Verify if a kit code exists",
+    description="Checks if the provided kit code (order number) exists in the system.",
+    parameters=[
+        OpenApiParameter(
+            name="code",
+            description="Kit code or order number to verify",
+            required=True,
+            location=OpenApiParameter.QUERY,
+            type=str,
+        ),
+    ],
+    responses={
+        200: inline_serializer(
+            "VerifyKitCodeResponse",
+            fields={"valid": serializers.BooleanField(), "message": serializers.CharField()},
+        ),
+        400: inline_serializer(
+            "ErrorResponse",
+            fields={"message": serializers.CharField()},
+        ),
+    },
+    tags=["Kits"],
+)
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def verify_kit_code(request):
+    """Verify if a kit code (order number) exists in the database."""
+    code = request.query_params.get("code", "").strip()
+    
+    if not code:
+        return Response(
+            {"valid": False, "message": "Kit code is required"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    
+    # Check if the order number exists
+    order_exists = Order.objects.filter(order_number=code).exists()
+    
+    if order_exists:
+        return Response(
+            {"valid": True, "message": "Kit code verified successfully"},
+            status=status.HTTP_200_OK,
+        )
+    else:
+        return Response(
+            {"valid": False, "message": "Kit code not found in the system"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+
+@extend_schema(
     summary="Create or update a client",
     description="Creates a new client or updates an existing one if the email already exists.",
     request=ClientSerializer,
