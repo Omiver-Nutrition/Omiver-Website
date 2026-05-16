@@ -12,6 +12,10 @@ from django.http import HttpResponse
 from django.contrib.auth import authenticate, login
 from django.contrib.auth import logout
 from django.contrib.auth.models import User
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.encoding import force_bytes, force_str
+from django.core.mail import send_mail
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
@@ -244,6 +248,83 @@ def register(request):
         user.delete()
         return Response(error, status.HTTP_400_BAD_REQUEST)
     return Response(client_serializer.data, status.HTTP_201_CREATED)
+
+
+@extend_schema(
+    summary="Request password reset",
+    description="Sends a password reset link to the provided email if a user exists.",
+    request=inline_serializer(
+        name="PasswordResetRequest",
+        fields={"email": serializers.EmailField()},
+    ),
+    responses={200: inline_serializer(name="PasswordResetResponse", fields={"message": serializers.CharField()} )},
+    tags=["Auth"],
+)
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def password_reset_request(request):
+    email = (request.data.get("email") or "").strip()
+    if not email:
+        return Response({"message": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = User.objects.get(email__iexact=email)
+    except User.DoesNotExist:
+        # Do not reveal whether email exists
+        return Response({"message": "If that email exists, a reset link has been sent."}, status=status.HTTP_200_OK)
+
+    # generate uid and token
+    uid = urlsafe_base64_encode(force_bytes(user.pk))
+    token = default_token_generator.make_token(user)
+
+    # Build frontend reset URL. Prefer settings.FRONTEND_URL, fallback to request host
+    frontend_base = getattr(settings, "FRONTEND_URL", None) or request.build_absolute_uri("/").rstrip("/")
+    reset_path = f"/reset-password?uid={uid}&token={token}"
+    reset_url = frontend_base + reset_path
+
+    subject = "Reset your password"
+    message = f"Hi\n\nYou requested a password reset. Click the link below to set a new password:\n\n{reset_url}\n\nIf you did not request this, please ignore this email.\n"
+    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", None)
+    try:
+        send_mail(subject, message, from_email, [user.email], fail_silently=False)
+    except Exception as e:
+        return Response({"message": "Failed to send reset email"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    return Response({"message": "If that email exists, a reset link has been sent."}, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    summary="Confirm password reset",
+    description="Accepts uid, token and new_password to complete a password reset.",
+    request=inline_serializer(
+        name="PasswordResetConfirm",
+        fields={"uid": serializers.CharField(), "token": serializers.CharField(), "new_password": serializers.CharField()},
+    ),
+    responses={200: inline_serializer(name="PasswordResetConfirmResponse", fields={"message": serializers.CharField()} )},
+    tags=["Auth"],
+)
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def password_reset_confirm(request):
+    uid = request.data.get("uid")
+    token = request.data.get("token")
+    new_password = request.data.get("new_password")
+    if not uid or not token or not new_password:
+        return Response({"message": "uid, token and new_password are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        uid_decoded = force_str(urlsafe_base64_decode(uid))
+        user = User.objects.get(pk=uid_decoded)
+    except Exception:
+        return Response({"message": "Invalid UID"}, status=status.HTTP_400_BAD_REQUEST)
+
+    if not default_token_generator.check_token(user, token):
+        return Response({"message": "Invalid or expired token"}, status=status.HTTP_400_BAD_REQUEST)
+
+    user.set_password(new_password)
+    user.save()
+    return Response({"message": "Password has been reset successfully"}, status=status.HTTP_200_OK)
+
 
 
 @extend_schema(
