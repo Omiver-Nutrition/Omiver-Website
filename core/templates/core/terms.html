@@ -1,0 +1,192 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}Omiver - Terms of Service{% endblock %}
+
+{% block inner_styles %}
+<link rel="stylesheet" href="{% static 'core/legal/style.css' %}" />
+{% endblock %}
+
+{% block inner_content %}
+<div class="legal-page-wrapper">
+  <div class="legal-container">
+    
+    <!-- Header -->
+    <header class="legal-header-section">
+      <div class="legal-badge" id="legal-badge-id">Omiver Nutrition</div>
+      <h1 class="legal-title" id="terms-title-id">Terms of Service</h1>
+      <div class="legal-subtitle" id="terms-updated-id">Last updated: May 19, 2026</div>
+    </header>
+
+    <!-- TL;DR Quick Summary Cards -->
+    <div class="legal-tldr-grid" id="tldr-grid-id">
+      <div class="legal-tldr-card" id="tldr-card-1">
+        <h3>Wellness Scope</h3>
+        <p>Omiver test kits and personalized nutrition reports are strictly for wellness and general health management. We are not a medical service.</p>
+      </div>
+      <div class="legal-tldr-card" id="tldr-card-2">
+        <h3>Eligibility</h3>
+        <p>You must be at least 18 years old and reside in a jurisdiction where our wellness services are legally offered to register an account.</p>
+      </div>
+      <div class="legal-tldr-card" id="tldr-card-3">
+        <h3>Data Ownership</h3>
+        <p>Your biological profile and biomarkers belong exclusively to you. We protect your privacy and encrypt your physiological data.</p>
+      </div>
+    </div>
+
+    <!-- Two-Column Layout -->
+    <div class="legal-layout" id="legal-layout-id">
+      
+      <!-- Sticky Table of Contents -->
+      <aside class="legal-sidebar" id="sidebar-container-id">
+        <h4 id="toc-header-id">Table of Contents</h4>
+        <ul class="legal-toc" id="toc-list-id">
+          <li class="active" id="toc-li-1"><a href="#section-intro" id="toc-a-1">1. Introduction</a></li>
+          <li id="toc-li-2"><a href="#section-services" id="toc-a-2">2. Scope of Services</a></li>
+          <li id="toc-li-3"><a href="#section-disclaimer" id="toc-a-3">3. Medical Disclaimer</a></li>
+          <li id="toc-li-4"><a href="#section-accounts" id="toc-a-4">4. User Accounts</a></li>
+          <li id="toc-li-5"><a href="#section-kits" id="toc-a-5">5. Test Kits & Analysis</a></li>
+          <li id="toc-li-6"><a href="#section-prohibited" id="toc-a-6">6. Prohibited Uses</a></li>
+          <li id="toc-li-7"><a href="#section-liability" id="toc-a-7">7. Limitation of Liability</a></li>
+          <li id="toc-li-8"><a href="#section-contact" id="toc-a-8">8. Contact Information</a></li>
+        </ul>
+      </aside>
+
+      <!-- Content -->
+      <main class="legal-content-card" id="content-card-id">
+        
+        <!-- 1. Introduction -->
+        <section id="section-intro" class="legal-section">
+          <h2>1. Introduction</h2>
+          <p>Welcome to Omiver! By accessing our website, purchasing our wellness kits, or using our biomarker analytics services (collectively, the "Services"), you agree to be bound by these Terms of Service ("Terms"). Please read them carefully before engaging with our platform.</p>
+          <p>These Terms constitute a legally binding agreement between you and Omiver Nutrition. If you do not agree to all of these Terms, you are expressly prohibited from using our Services and must discontinue use immediately.</p>
+        </section>
+
+        <!-- 2. Scope of Services -->
+        <section id="section-services" class="legal-section">
+          <h2>2. Scope of Services</h2>
+          <p>Omiver provides a wellness-focused platform combining physiological biomarker screening with personalized nutritional, diet, and lifestyle recommendations. Our services include:</p>
+          <ul>
+            <li>At-home sample collection kits for measuring general wellness biomarkers.</li>
+            <li>Machine-learning generated analysis of biological data.</li>
+            <li>Interactive dashboards displaying physiological metrics.</li>
+            <li>Customized dietary and workout regimens adapted to biological feedback.</li>
+          </ul>
+          <p>We reserve the right to modify, suspend, or discontinue any part of our Services at any time without prior notice.</p>
+        </section>
+
+        <!-- 3. Medical Disclaimer -->
+        <section id="section-disclaimer" class="legal-section">
+          <h2>3. Medical Disclaimer</h2>
+          
+          <div class="legal-callout-card" id="medical-disclaimer-box">
+            <h4>⚠️ IMPORTANT: NOT MEDICAL ADVICE</h4>
+            <p>Omiver is a wellness technology company, not a healthcare provider, laboratory, or clinical medical service. All biomarker analysis and measuring are conducted by independent third-party laboratories. Our test kits, metrics, and reports are intended solely for general informational and wellness purposes. They cannot, and are not intended to, diagnose, treat, cure, or prevent any disease, condition, or physical impairment.</p>
+          </div>
+
+          <p>Any recommendations, summaries, or guidelines provided by our platform are not clinical prescriptions. You should never disregard professional medical advice or delay seeking it because of information you have read on Omiver.</p>
+          <p>Always consult with your physician or other qualified healthcare professional before making changes to your diet, supplementation, or exercise routines, especially if you have a pre-existing medical condition or are taking prescription medication.</p>
+        </section>
+
+        <!-- 4. User Accounts -->
+        <section id="section-accounts" class="legal-section">
+          <h2>4. User Accounts</h2>
+          <p>To access certain features of our platform, including viewing your molecular reports, you must register an account. When creating an account, you agree to:</p>
+          <ul>
+            <li>Provide accurate, current, and complete information.</li>
+            <li>Maintain the security and confidentiality of your login credentials.</li>
+            <li>Promptly update your account details in the event of changes.</li>
+            <li>Notify us immediately if you suspect any unauthorized access or security breach.</li>
+          </ul>
+          <p>You are solely responsible for all activities that occur under your account. Omiver reserves the right to terminate accounts that violate these terms or engage in fraudulent activity.</p>
+        </section>
+
+        <!-- 5. Test Kits & Analysis -->
+        <section id="section-kits" class="legal-section">
+          <h2>5. Test Kits & Analysis</h2>
+          <p>Omiver wellness testing kits must be used in strict accordance with the instructions included in the package. You understand and agree that:</p>
+          <ul>
+            <li>Samples must be sent to our designated independent laboratory partner within the specified time limits.</li>
+            <li>Failure to follow guidelines may lead to sample degradation and inaccurate or void results.</li>
+            <li>You authorize Omiver to retrieve biomarker results from our laboratory partners to compile your reports.</li>
+          </ul>
+        </section>
+
+        <!-- 6. Prohibited Uses -->
+        <section id="section-prohibited" class="legal-section">
+          <h2>6. Prohibited Uses</h2>
+          <p>You agree not to use the platform or Services to:</p>
+          <ul>
+            <li>Violate any local, state, national, or international laws or regulations.</li>
+            <li>Impersonate any person or entity, or misrepresent your affiliation with a person or entity.</li>
+            <li>Interfere with or disrupt the servers, networks, or API integrations supporting Omiver.</li>
+            <li>Attempt to reverse-engineer, decompile, or extract the algorithmic logic of the Omiver platform.</li>
+            <li>Upload or transmit viruses, malware, or malicious tracking scripts.</li>
+          </ul>
+        </section>
+
+        <!-- 7. Limitation of Liability -->
+        <section id="section-liability" class="legal-section">
+          <h2>7. Limitation of Liability</h2>
+          <p>TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, OMIVER NUTRITION AND ITS DIRECTORS, EMPLOYEES, AND PARTNERS SHALL NOT BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR EXEMPLARY DAMAGES. THIS INCLUDES, BUT IS NOT LIMITED TO, DAMAGES FOR LOSS OF PROFITS, GOODWILL, DATA, OR OTHER INTANGIBLE LOSSES RESULTING FROM YOUR USE OF OR INABILITY TO USE THE SERVICES.</p>
+          <p>OUR SERVICES ARE PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, OR NON-INFRINGEMENT.</p>
+        </section>
+
+        <!-- 8. Contact Information -->
+        <section id="section-contact" class="legal-section">
+          <h2>8. Contact Information</h2>
+          <p>If you have any questions, concerns, or feedback regarding these Terms of Service, please reach out to our team:</p>
+          <p>
+            <strong>Email:</strong> <a href="mailto:info@omiver.me" id="contact-email-link">info@omiver.me</a><br>
+            <strong>Corporate:</strong> Omiver Nutrition, Inc.<br>
+            <strong>Support:</strong> <a href="/#contact-form-response" id="contact-page-link">Contact Support Form</a>
+          </p>
+        </section>
+
+      </main>
+    </div>
+
+  </div>
+</div>
+
+<!-- Intersection Observer Scroll-Spy Script -->
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    const sections = document.querySelectorAll(".legal-section");
+    const tocItems = document.querySelectorAll(".legal-toc li");
+
+    const observerOptions = {
+      root: null,
+      rootMargin: "0px 0px -60% 0px", // Triggers when the section is in the upper half of the viewport
+      threshold: 0
+    };
+
+    const observer = new IntersectionObserver(function(entries) {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const activeId = entry.target.getAttribute("id");
+          
+          // Update TOC active states
+          tocItems.forEach(li => {
+            const link = li.querySelector("a");
+            if (link && link.getAttribute("href") === `#${activeId}`) {
+              li.classList.add("active");
+              
+              // Scroll active TOC item into view in horizontal mobile layout
+              if (window.innerWidth <= 900) {
+                li.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+              }
+            } else {
+              li.classList.remove("active");
+            }
+          });
+        }
+      });
+    }, observerOptions);
+
+    sections.forEach(section => {
+      observer.observe(section);
+    });
+  });
+</script>
+{% endblock %}

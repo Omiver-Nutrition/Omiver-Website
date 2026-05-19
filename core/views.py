@@ -27,3 +27,9 @@ def login_page(request):
 
 def register_page(request):
     return render(request, "core/register.html")
+
+def terms_page(request):
+    return render(request, "core/terms.html")
+
+def privacy_page(request):
+    return render(request, "core/privacy.html")

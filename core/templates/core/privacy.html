@@ -1,0 +1,190 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}Omiver - Privacy Policy{% endblock %}
+
+{% block inner_styles %}
+<link rel="stylesheet" href="{% static 'core/legal/style.css' %}" />
+{% endblock %}
+
+{% block inner_content %}
+<div class="legal-page-wrapper">
+  <div class="legal-container">
+    
+    <!-- Header -->
+    <header class="legal-header-section">
+      <div class="legal-badge" id="privacy-badge-id">Omiver Nutrition</div>
+      <h1 class="legal-title" id="privacy-title-id">Privacy Policy</h1>
+      <div class="legal-subtitle" id="privacy-updated-id">Last updated: May 19, 2026</div>
+    </header>
+
+    <!-- TL;DR Quick Summary Cards -->
+    <div class="legal-tldr-grid" id="privacy-tldr-grid-id">
+      <div class="legal-tldr-card" id="privacy-tldr-card-1">
+        <h3>Data Security</h3>
+        <p>We employ industry-standard AES-256 encryption for your biomarker data and personal physiological profile at rest and in transit.</p>
+      </div>
+      <div class="legal-tldr-card" id="privacy-tldr-card-2">
+        <h3>No Selling Data</h3>
+        <p>We will never sell, lease, or license your sensitive biological metrics or personal identities to third-party marketers or insurance companies.</p>
+      </div>
+      <div class="legal-tldr-card" id="privacy-tldr-card-3">
+        <h3>Full Ownership</h3>
+        <p>You maintain complete control over your data. You can export your biomarker metrics or request permanent account deletion at any time.</p>
+      </div>
+    </div>
+
+    <!-- Two-Column Layout -->
+    <div class="legal-layout" id="privacy-legal-layout-id">
+      
+      <!-- Sticky Table of Contents -->
+      <aside class="legal-sidebar" id="privacy-sidebar-container-id">
+        <h4 id="privacy-toc-header-id">Table of Contents</h4>
+        <ul class="legal-toc" id="privacy-toc-list-id">
+          <li class="active" id="privacy-toc-li-1"><a href="#privacy-sec-collect" id="privacy-toc-a-1">1. Data Collection</a></li>
+          <li id="privacy-toc-li-2"><a href="#privacy-sec-usage" id="privacy-toc-a-2">2. How We Use Data</a></li>
+          <li id="privacy-toc-li-3"><a href="#privacy-sec-labs" id="privacy-toc-a-3">3. Third-Party Labs</a></li>
+          <li id="privacy-toc-li-4"><a href="#privacy-sec-security" id="privacy-toc-a-4">4. Security Standards</a></li>
+          <li id="privacy-toc-li-5"><a href="#privacy-sec-cookies" id="privacy-toc-a-5">5. Cookies & Web Tech</a></li>
+          <li id="privacy-toc-li-6"><a href="#privacy-sec-retention" id="privacy-toc-a-6">6. Retention & Deletion</a></li>
+          <li id="privacy-toc-li-7"><a href="#privacy-sec-rights" id="privacy-toc-a-7">7. User Legal Rights</a></li>
+          <li id="privacy-toc-li-8"><a href="#privacy-sec-updates" id="privacy-toc-a-8">8. Policy Updates</a></li>
+        </ul>
+      </aside>
+
+      <!-- Content -->
+      <main class="legal-content-card" id="privacy-content-card-id">
+        
+        <!-- 1. Data Collection -->
+        <section id="privacy-sec-collect" class="legal-section">
+          <h2>1. Data Collection</h2>
+          <p>At Omiver, we collect information to deliver a personalized and adaptive wellness platform. The categories of information we collect include:</p>
+          <ul>
+            <li><strong>Personal Identifiers:</strong> Name, email address, mailing address, and billing information.</li>
+            <li><strong>Demographic Data:</strong> Age, sex, and lifestyle indicators necessary to calibrate biological models.</li>
+            <li><strong>Biomarker & Physiological Data:</strong> Physiological indicators and biomarker levels measured from samples processed by our independent laboratory partners.</li>
+            <li><strong>Technical Usage Data:</strong> IP address, browser type, device properties, and navigation interactions collected via standard secure logs.</li>
+          </ul>
+        </section>
+
+        <!-- 2. How We Use Data -->
+        <section id="privacy-sec-usage" class="legal-section">
+          <h2>2. How We Use Data</h2>
+          <p>We process your information under rigorous security constraints for the following purposes:</p>
+          <ul>
+            <li>Generating customized wellness, exercise, and dietary recommendations.</li>
+            <li>Improving our predictive algorithms and machine-learning models to increase advice accuracy.</li>
+            <li>Processing payments and shipping testing kits to your address.</li>
+            <li>Communicating critical updates regarding your account, reports, or security alerts.</li>
+          </ul>
+          <p>We do not use your sensitive biological biomarker metrics for general targeted advertising.</p>
+        </section>
+
+        <!-- 3. Third-Party Labs -->
+        <section id="privacy-sec-labs" class="legal-section">
+          <h2>3. Third-Party Labs</h2>
+          <p>To perform molecular analysis, we contract with accredited independent laboratory facilities. When you submit a sample:</p>
+          <ul>
+            <li>We transfer the sample to the lab with a pseudonymized, randomized ID to protect your name and personal identifiers.</li>
+            <li>The lab processes the sample and transmits raw biomarker values back to Omiver.</li>
+            <li>The lab is strictly prohibited from storing, sharing, or using your biological sample or data for any other commercial purpose.</li>
+          </ul>
+        </section>
+
+        <!-- 4. Security Standards -->
+        <section id="privacy-sec-security" class="legal-section">
+          <h2>4. Security Standards</h2>
+          
+          <div class="legal-callout-card" id="privacy-security-box">
+            <h4>🔒 PRIVACY FIRST BY DESIGN</h4>
+            <p>We treat your biological data as highly sensitive information. Omiver strictly separates your personal identification keys (like billing name and email) from your biological biomarker databases. Our system utilizes end-to-end TLS encryption in transit and high-grade AES-256 encryption for database records at rest.</p>
+          </div>
+
+          <p>We limit internal database access to authorized staff members under strict multi-factor authentication protocols and logging requirements. While we make every effort to safeguard data, no transmission method over the internet can be guaranteed as 100% secure.</p>
+        </section>
+
+        <!-- 5. Cookies & Web Tech -->
+        <section id="privacy-sec-cookies" class="legal-section">
+          <h2>5. Cookies & Web Tech</h2>
+          <p>We use cookies and secure local storage tokens to improve user experience and keep you logged in during your session. These consist of:</p>
+          <ul>
+            <li><strong>Essential Cookies:</strong> Crucial for navigating the platform and completing session checkouts securely.</li>
+            <li><strong>Performance Cookies:</strong> Helping us understand how visitors interact with pages to fix performance bugs and layout issues.</li>
+          </ul>
+          <p>You can manage cookie preferences directly in your web browser settings, though blocking essential cookies may disable parts of our website.</p>
+        </section>
+
+        <!-- 6. Retention & Deletion -->
+        <section id="privacy-sec-retention" class="legal-section">
+          <h2>6. Retention & Deletion</h2>
+          <p>We retain your data only for as long as necessary to provide your personalized wellness reports or comply with regulatory standards.</p>
+          <p>If you choose to delete your account, we will permanently purge or fully anonymize all biological biomarker profiles and personal identifiers from our production databases within 30 days of your request.</p>
+        </section>
+
+        <!-- 7. User Legal Rights -->
+        <section id="privacy-sec-rights" class="legal-section">
+          <h2>7. User Legal Rights</h2>
+          <p>Depending on your location (such as California or the European Economic Area), you may have legal rights regarding your data, including:</p>
+          <ul>
+            <li><strong>Right to Access:</strong> The right to request a comprehensive copy of all biological reports and metrics we store.</li>
+            <li><strong>Right to Portability:</strong> The right to download your raw biomarker records in a standard digital format.</li>
+            <li><strong>Right to Erasure:</strong> The right to request complete deletion of your profile from our databases.</li>
+            <li><strong>Right to Rectification:</strong> The right to request corrections to inaccurate demographic details.</li>
+          </ul>
+          <p>To exercise these rights, please submit a request to <a href="mailto:info@omiver.me" id="privacy-rights-email">info@omiver.me</a>.</p>
+        </section>
+
+        <!-- 8. Policy Updates -->
+        <section id="privacy-sec-updates" class="legal-section">
+          <h2>8. Policy Updates</h2>
+          <p>We may update this Privacy Policy from time to time to adapt to changes in technologies, legal frameworks, or clinical laboratory processes. Any modifications will be posted on this page with an updated "Last updated" date timestamp at the top.</p>
+          <p>If you continue to use Omiver Services after changes take effect, you agree to the updated terms and policies.</p>
+        </section>
+
+      </main>
+    </div>
+
+  </div>
+</div>
+
+<!-- Intersection Observer Scroll-Spy Script -->
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    const sections = document.querySelectorAll(".legal-section");
+    const tocItems = document.querySelectorAll(".legal-toc li");
+
+    const observerOptions = {
+      root: null,
+      rootMargin: "0px 0px -60% 0px", // Triggers when the section is in the upper half of the viewport
+      threshold: 0
+    };
+
+    const observer = new IntersectionObserver(function(entries) {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const activeId = entry.target.getAttribute("id");
+          
+          // Update TOC active states
+          tocItems.forEach(li => {
+            const link = li.querySelector("a");
+            if (link && link.getAttribute("href") === `#${activeId}`) {
+              li.classList.add("active");
+              
+              // Scroll active TOC item into view in horizontal mobile layout
+              if (window.innerWidth <= 900) {
+                li.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+              }
+            } else {
+              li.classList.remove("active");
+            }
+          });
+        }
+      });
+    }, observerOptions);
+
+    sections.forEach(section => {
+      observer.observe(section);
+    });
+  });
+</script>
+{% endblock %}
