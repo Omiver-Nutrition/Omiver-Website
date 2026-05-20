@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.db import transaction
 from .models import (
-    TestKit, Order, DeliveryEvent, PaymentInfo, BillingAddress, Purchase,
+    TestKit, Order, KitBarcodeAssignment, DeliveryEvent, PaymentInfo, BillingAddress, Purchase,
     DietLog, ExerciseLog,
     Biomarker, BiomarkerTest, BiomarkerResult,
 )
@@ -37,6 +37,13 @@ class OrderAdmin(admin.ModelAdmin):
         "mark_as_delivered",
         "mark_as_cancelled",
     ]
+
+
+@admin.register(KitBarcodeAssignment)
+class KitBarcodeAssignmentAdmin(admin.ModelAdmin):
+    list_display = ("barcode_number", "client", "order", "test_kit", "created_at")
+    search_fields = ("barcode_number", "client__email", "order__order_number")
+    list_filter = ("test_kit",)
 
     def _set_status_with_event(self, request, queryset, status, title, description, event_type=None, completed=False):
         event_type = event_type or status

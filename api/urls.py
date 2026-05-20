@@ -18,6 +18,7 @@ urlpatterns = [
     path("check_email", views.check_email, name="check_email"),
     path("validate_referral_code", views.validate_referral_code, name="validate_referral_code"),
     path("verify-kit-code", views.verify_kit_code, name="verify_kit_code"),
+    path("barcode/lookup", views.lookup_barcode, name="lookup_barcode"),
     path("login", views.login_handler, name="login"),
     path("logout", views.logout_handler, name="logout"),
     path("verify-token", views.verify_token_handler, name="verify_token"),

@@ -1,3 +1,5 @@
+import uuid
+
 from rest_framework import serializers
 
 from core.models import *
@@ -119,11 +121,16 @@ class OrderSerializer(serializers.ModelSerializer):
     """Used for list views — lightweight."""
     test_kit_name = serializers.CharField(source="test_kit.name", read_only=True)
     biomarker_count = serializers.IntegerField(source="test_kit.biomarker_count", read_only=True)
+    barcode_number = serializers.SerializerMethodField()
+
+    def get_barcode_number(self, obj):
+        assignment = getattr(obj, "barcode_assignment", None)
+        return assignment.barcode_number if assignment else None
 
     class Meta:
         model = Order
         fields = [
-            "id", "client", "test_kit", "test_kit_name", "biomarker_count",
+            "id", "client", "test_kit", "test_kit_name", "biomarker_count", "barcode_number",
             "order_number", "order_date", "status", "tracking_number",
             "created_at", "updated_at",
         ]
@@ -133,11 +140,16 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     """Used for detail views — includes nested kit and delivery events."""
     test_kit = TestKitSerializer(read_only=True)
     delivery_events = DeliveryEventSerializer(many=True, read_only=True)
+    barcode_number = serializers.SerializerMethodField()
+
+    def get_barcode_number(self, obj):
+        assignment = getattr(obj, "barcode_assignment", None)
+        return assignment.barcode_number if assignment else None
 
     class Meta:
         model = Order
         fields = [
-            "id", "client", "test_kit", "order_number", "order_date",
+            "id", "client", "test_kit", "barcode_number", "order_number", "order_date",
             "status", "tracking_number", "delivery_events",
             "created_at", "updated_at",
         ]
@@ -145,9 +157,79 @@ class OrderDetailSerializer(serializers.ModelSerializer):
 
 class OrderCreateSerializer(serializers.ModelSerializer):
     """Used for creating orders."""
+
+    client = serializers.PrimaryKeyRelatedField(queryset=Client.objects.all(), required=False)
+    client_id = serializers.IntegerField(write_only=True, required=False)
+    test_kit = serializers.PrimaryKeyRelatedField(queryset=TestKit.objects.all(), required=False)
+    test_kit_id = serializers.IntegerField(write_only=True, required=False)
+    barcode_number = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    kit_codes = serializers.ListField(child=serializers.CharField(), write_only=True, required=False)
+
     class Meta:
         model = Order
-        fields = ["client", "test_kit", "order_number", "tracking_number"]
+        fields = [
+            "client", "client_id", "test_kit", "test_kit_id",
+            "barcode_number", "kit_codes", "order_number", "tracking_number",
+        ]
+        extra_kwargs = {
+            "order_number": {"required": False, "allow_blank": True},
+            "tracking_number": {"required": False, "allow_blank": True},
+        }
+
+    def validate(self, attrs):
+        client = attrs.get("client")
+        test_kit = attrs.get("test_kit")
+        client_id = attrs.pop("client_id", None)
+        test_kit_id = attrs.pop("test_kit_id", None)
+        kit_codes = attrs.get("kit_codes") or []
+
+        if client is None and client_id is not None:
+            client = Client.objects.filter(pk=client_id).first()
+            if not client:
+                raise serializers.ValidationError({"client_id": "Client not found."})
+            attrs["client"] = client
+
+        if test_kit is None and test_kit_id is not None:
+            test_kit = TestKit.objects.filter(pk=test_kit_id).first()
+            if not test_kit:
+                raise serializers.ValidationError({"test_kit_id": "Test kit not found."})
+            attrs["test_kit"] = test_kit
+
+        if "barcode_number" not in attrs or not str(attrs.get("barcode_number", "")).strip():
+            if kit_codes:
+                attrs["barcode_number"] = str(kit_codes[0]).strip()
+
+        if not attrs.get("client"):
+            raise serializers.ValidationError({"client": "Client is required."})
+        if not attrs.get("test_kit"):
+            raise serializers.ValidationError({"test_kit": "Test kit is required."})
+        return attrs
+
+    def create(self, validated_data):
+        validated_data.pop("client_id", None)
+        validated_data.pop("test_kit_id", None)
+        kit_codes = validated_data.pop("kit_codes", [])
+        barcode_number = (validated_data.pop("barcode_number", "") or "").strip()
+        if not barcode_number and kit_codes:
+            barcode_number = str(kit_codes[0]).strip()
+
+        order = Order.objects.create(
+            client=validated_data["client"],
+            test_kit=validated_data["test_kit"],
+            order_number=validated_data.get("order_number") or uuid.uuid4().hex[:14],
+            tracking_number=validated_data.get("tracking_number", ""),
+        )
+
+        barcode_value = barcode_number or order.order_number
+        KitBarcodeAssignment.objects.update_or_create(
+            order=order,
+            defaults={
+                "client": validated_data["client"],
+                "test_kit": validated_data["test_kit"],
+                "barcode_number": barcode_value,
+            },
+        )
+        return order
 
 
 # ── Checkout / Payment ──────────────────────────────────────────────────

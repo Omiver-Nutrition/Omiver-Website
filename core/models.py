@@ -266,6 +266,24 @@ class Order(models.Model):
         return f"Order {self.order_number} – {self.test_kit.name} for {self.client}"
 
 
+class KitBarcodeAssignment(models.Model):
+    """Maps a unique kit barcode to the client/order/test kit that owns it."""
+
+    id = models.AutoField(primary_key=True)
+    client = models.ForeignKey("Client", on_delete=models.CASCADE, related_name="kit_barcode_assignments")
+    order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name="barcode_assignment")
+    test_kit = models.ForeignKey(TestKit, on_delete=models.CASCADE, related_name="barcode_assignments")
+    barcode_number = models.CharField(max_length=100, unique=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Barcode {self.barcode_number} – {self.client}"
+
+
 class DeliveryEvent(models.Model):
     """Individual delivery milestone (e.g. 'Order Placed', 'Kit Delivered')."""
 

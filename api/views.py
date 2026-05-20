@@ -36,6 +36,7 @@ from .serializer import (
 )
 from core.models import (
     MealPlan, Client, TestKit, Order, DeliveryEvent,
+    KitBarcodeAssignment,
     PaymentInfo, BillingAddress, Purchase,
     Biomarker, BiomarkerTest, BiomarkerResult,
     Membership, Recommendation, PricingTier,
@@ -654,7 +655,7 @@ def list_orders(request):
     client_id = request.GET.get("client_id")
     if not client_id:
         return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
-    orders = Order.objects.filter(client_id=client_id).select_related("test_kit")
+    orders = Order.objects.filter(client_id=client_id).select_related("test_kit", "barcode_assignment")
     return Response(OrderSerializer(orders, many=True).data)
 
 
@@ -767,7 +768,7 @@ def create_order(request):
 def order_detail(request, pk):
     """Get a single order with nested delivery events."""
     try:
-        order = Order.objects.select_related("test_kit").prefetch_related("delivery_events").get(pk=pk)
+        order = Order.objects.select_related("test_kit", "barcode_assignment").prefetch_related("delivery_events").get(pk=pk)
     except Order.DoesNotExist:
         return Response({"error": "Order not found"}, status.HTTP_404_NOT_FOUND)
     return Response(OrderDetailSerializer(order).data)
@@ -829,7 +830,7 @@ def update_order_status(request, pk):
     order.refresh_from_db()
     return Response(
         OrderDetailSerializer(
-            Order.objects.select_related("test_kit").prefetch_related("delivery_events").get(pk=pk)
+            Order.objects.select_related("test_kit", "barcode_assignment").prefetch_related("delivery_events").get(pk=pk)
         ).data
     )
 
@@ -852,13 +853,60 @@ def track_order(request):
     try:
         order = (
             Order.objects
-            .select_related("test_kit")
+            .select_related("test_kit", "barcode_assignment")
             .prefetch_related("delivery_events")
             .get(tracking_number=tracking_number)
         )
     except Order.DoesNotExist:
         return Response({"error": "Order not found"}, status.HTTP_404_NOT_FOUND)
     return Response(OrderDetailSerializer(order).data)
+
+
+@extend_schema(
+    summary="Lookup kit barcode",
+    description="Lookup which client/order/test kit a physical barcode is assigned to.",
+    parameters=[
+        OpenApiParameter(name="barcode", type=str, required=True, description="Barcode string"),
+    ],
+    responses={200: inline_serializer(
+        name="BarcodeLookupResponse",
+        fields={
+            "found": serializers.BooleanField(),
+            "barcode": serializers.CharField(required=False),
+            "client_id": serializers.IntegerField(required=False),
+            "client_name": serializers.CharField(required=False),
+            "order_id": serializers.IntegerField(required=False),
+            "test_kit": serializers.CharField(required=False),
+            "assigned_at": serializers.DateTimeField(required=False),
+        },
+    )},
+    tags=["Kits"],
+)
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def lookup_barcode(request):
+    barcode = (request.GET.get("barcode") or "").strip()
+    if not barcode:
+        return Response({"message": "barcode query param is required"}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        assignment = KitBarcodeAssignment.objects.select_related("client", "test_kit", "order").get(barcode_number=barcode)
+    except KitBarcodeAssignment.DoesNotExist:
+        return Response({"found": False}, status=status.HTTP_404_NOT_FOUND)
+
+    client_name = None
+    if assignment.client:
+        client_name = f"{assignment.client.first_name or ''} {assignment.client.last_name or ''}".strip()
+
+    data = {
+        "found": True,
+        "barcode": assignment.barcode_number,
+        "client_id": assignment.client.id if assignment.client else None,
+        "client_name": client_name,
+        "order_id": assignment.order.id if assignment.order else None,
+        "test_kit": assignment.test_kit.name if assignment.test_kit else None,
+        "assigned_at": assignment.created_at.isoformat() if getattr(assignment, "created_at", None) else None,
+    }
+    return Response(data, status=status.HTTP_200_OK)
 
 
 # ── Checkout / Purchases ────────────────────────────────────────────────
