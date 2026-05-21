@@ -25,5 +25,17 @@
       "created_at": "2024-06-02T00:00:00Z",
       "updated_at": "2024-06-02T00:00:00Z"
     }
+  },
+  {
+    "model": "core.kitbarcodeassignment",
+    "pk": 1,
+    "fields": {
+      "client_id": 1,
+      "order_id": 2,
+      "test_kit_id": 1,
+      "barcode_number": "21191290",
+      "created_at": "2024-06-02T00:00:00Z",
+      "updated_at": "2024-06-02T00:00:00Z"
+    }
   }
 ]

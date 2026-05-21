@@ -22,6 +22,7 @@ from core.models import (
 	Membership,
 	MealPlan,
 	Order,
+ 	KitBarcodeAssignment,
 	PaymentInfo,
 	PricingTier,
 	Purchase,
@@ -441,6 +442,25 @@ class ApiSmokeTests(TestCase):
 
 		self.assertEqual(response.status_code, 201)
 		created_order = Order.objects.get(order_number="ORD-3001")
+		self.assertEqual(created_order.delivery_events.count(), 1)
+
+	def test_create_order_resolves_test_kit_from_barcode(self):
+		barcode = "21191290"
+
+		payload = {
+			"client_id": self.other_client.id,
+			"kit_codes": [barcode],
+			"test_kit_name": self.kit.name,
+			"order_number": "ORD-3002",
+			"tracking_number": "TRK-3002",
+		}
+		response = self.api_client.post(reverse("create_order"), payload, format="json")
+
+		self.assertEqual(response.status_code, 201)
+		created_order = Order.objects.select_related("test_kit", "barcode_assignment").get(order_number="ORD-3002")
+		self.assertEqual(created_order.test_kit_id, self.kit.id)
+		self.assertEqual(created_order.barcode_assignment.client_id, self.other_client.id)
+		self.assertEqual(created_order.barcode_assignment.barcode_number, barcode)
 		self.assertEqual(created_order.delivery_events.count(), 1)
 
 	def test_order_detail_returns_nested_events(self):

@@ -162,6 +162,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
     client_id = serializers.IntegerField(write_only=True, required=False)
     test_kit = serializers.PrimaryKeyRelatedField(queryset=TestKit.objects.all(), required=False)
     test_kit_id = serializers.IntegerField(write_only=True, required=False)
+    test_kit_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
     barcode_number = serializers.CharField(write_only=True, required=False, allow_blank=True)
     kit_codes = serializers.ListField(child=serializers.CharField(), write_only=True, required=False)
 
@@ -169,7 +170,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         model = Order
         fields = [
             "client", "client_id", "test_kit", "test_kit_id",
-            "barcode_number", "kit_codes", "order_number", "tracking_number",
+            "test_kit_name", "barcode_number", "kit_codes", "order_number", "tracking_number",
         ]
         extra_kwargs = {
             "order_number": {"required": False, "allow_blank": True},
@@ -195,9 +196,26 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({"test_kit_id": "Test kit not found."})
             attrs["test_kit"] = test_kit
 
-        if "barcode_number" not in attrs or not str(attrs.get("barcode_number", "")).strip():
-            if kit_codes:
-                attrs["barcode_number"] = str(kit_codes[0]).strip()
+        barcode_number = str(attrs.get("barcode_number", "")).strip()
+        if not barcode_number and kit_codes:
+            barcode_number = str(kit_codes[0]).strip()
+            attrs["barcode_number"] = barcode_number
+
+        if not attrs.get("test_kit"):
+            barcode_assignment = None
+            if barcode_number:
+                barcode_assignment = KitBarcodeAssignment.objects.select_related("test_kit").filter(
+                    barcode_number=barcode_number
+                ).first()
+
+            if barcode_assignment:
+                attrs["test_kit"] = barcode_assignment.test_kit
+            else:
+                test_kit_name = str(attrs.pop("test_kit_name", "") or "").strip()
+                if test_kit_name:
+                    test_kit = TestKit.objects.filter(name__iexact=test_kit_name).first()
+                    if test_kit:
+                        attrs["test_kit"] = test_kit
 
         if not attrs.get("client"):
             raise serializers.ValidationError({"client": "Client is required."})
