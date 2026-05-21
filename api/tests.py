@@ -22,9 +22,9 @@ from core.models import (
 	Membership,
 	MealPlan,
 	Order,
- 	KitBarcodeAssignment,
+	ShippingInfo,
+	KitBarcodeAssignment,
 	PaymentInfo,
-	PricingTier,
 	Purchase,
 	Recommendation,
 	TestKit,
@@ -88,30 +88,13 @@ class ApiSmokeTests(TestCase):
 			price=Decimal("149.00"),
 		)
 
-		self.tier = PricingTier.objects.create(
-			test_kit=self.kit,
-			min_quantity=2,
-			max_quantity=4,
-			discount_percent=Decimal("10.00"),
-		)
-		self.tier_high = PricingTier.objects.create(
-			test_kit=self.kit,
-			min_quantity=5,
-			max_quantity=None,
-			discount_percent=Decimal("20.00"),
-		)
-		self.other_tier = PricingTier.objects.create(
-			test_kit=self.premium_kit,
-			min_quantity=1,
-			max_quantity=None,
-			discount_percent=Decimal("5.00"),
-		)
 
 		self.order = Order.objects.create(
 			client=self.patient,
 			test_kit=self.kit,
 			order_number="ORD-1001",
-			tracking_number="TRK-1001",
+			forward_tracking_number="TRK-1001",
+			return_tracking_number="RTR-1001",
 			status="PENDING",
 			quantity=1,
 		)
@@ -119,7 +102,8 @@ class ApiSmokeTests(TestCase):
 			client=self.patient,
 			test_kit=self.kit,
 			order_number="ORD-1002",
-			tracking_number="TRK-1002",
+			forward_tracking_number="TRK-1002",
+			return_tracking_number="RTR-1002",
 			status="CONFIRMED",
 			quantity=2,
 		)
@@ -127,7 +111,8 @@ class ApiSmokeTests(TestCase):
 			client=self.patient,
 			test_kit=self.kit,
 			order_number="ORD-2001",
-			tracking_number="TRK-2001",
+			forward_tracking_number="TRK-2001",
+			return_tracking_number="RTR-2001",
 			status="PENDING",
 			quantity=1,
 		)
@@ -135,7 +120,8 @@ class ApiSmokeTests(TestCase):
 			client=self.patient,
 			test_kit=self.kit,
 			order_number="ORD-2002",
-			tracking_number="TRK-2002",
+			forward_tracking_number="TRK-2002",
+			return_tracking_number="RTR-2002",
 			status="PENDING",
 			quantity=1,
 		)
@@ -401,7 +387,8 @@ class ApiSmokeTests(TestCase):
 				"order_number",
 				"order_date",
 				"status",
-				"tracking_number",
+				"forward_tracking_number",
+				"return_tracking_number",
 				"quantity",
 				"client_id",
 				"client_name",
@@ -436,7 +423,8 @@ class ApiSmokeTests(TestCase):
 			"client": self.other_client.id,
 			"test_kit": self.kit.id,
 			"order_number": "ORD-3001",
-			"tracking_number": "TRK-3001",
+			"forward_tracking_number": "TRK-3001",
+			"return_tracking_number": "RTR-3001",
 		}
 		response = self.api_client.post(reverse("create_order"), payload, format="json")
 
@@ -452,7 +440,8 @@ class ApiSmokeTests(TestCase):
 			"kit_codes": [barcode],
 			"test_kit_name": self.kit.name,
 			"order_number": "ORD-3002",
-			"tracking_number": "TRK-3002",
+			"forward_tracking_number": "TRK-3002",
+			"return_tracking_number": "RTR-3002",
 		}
 		response = self.api_client.post(reverse("create_order"), payload, format="json")
 
@@ -482,14 +471,15 @@ class ApiSmokeTests(TestCase):
 		self.assertEqual(self.order.status, "SHIPPED")
 		self.assertTrue(self.order.delivery_events.filter(event_type="SHIPPED").exists())
 
-	def test_update_order_status_persists_tracking_number(self):
+	def test_update_order_status_persists_forward_tracking_number(self):
 		response = self.api_client.patch(
 			reverse("update_order_status", args=[self.order.id]),
 			{
 				"status": "SHIPPED",
 				"title": "Shipped",
 				"description": "Your kit left the warehouse",
-				"tracking_number": "TRK-9999",
+				"forward_tracking_number": "TRK-9999",
+				"return_tracking_number": "RTR-9999",
 			},
 			format="json",
 		)
@@ -497,11 +487,32 @@ class ApiSmokeTests(TestCase):
 		self.assertEqual(response.status_code, 200)
 		self.order.refresh_from_db()
 		self.assertEqual(self.order.status, "SHIPPED")
-		self.assertEqual(self.order.tracking_number, "TRK-9999")
+		self.assertEqual(self.order.forward_tracking_number, "TRK-9999")
+		self.assertEqual(self.order.return_tracking_number, "RTR-9999")
 		self.assertTrue(self.order.delivery_events.filter(event_type="SHIPPED").exists())
 
+	def test_update_order_status_creates_shipping_info(self):
+		response = self.api_client.patch(
+			reverse("update_order_status", args=[self.order.id]),
+			{
+				"status": "SHIPPED",
+				"title": "Shipped",
+				"description": "Kit shipped",
+				"forward_tracking_number": "TRK-SHIP-1",
+				"return_tracking_number": "RTR-SHIP-1",
+			},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.order.refresh_from_db()
+		self.assertEqual(self.order.status, "SHIPPED")
+		shipping = ShippingInfo.objects.get(order=self.order)
+		self.assertEqual(shipping.order_id, self.order.id)
+		self.assertEqual(shipping.tracking_number, "TRK-SHIP-1")
+
 	def test_track_order_finds_by_tracking_number(self):
-		response = self.api_client.get(reverse("track_order"), {"tracking_number": self.order.tracking_number})
+		response = self.api_client.get(reverse("track_order"), {"tracking_number": self.order.forward_tracking_number})
 
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(response.data["id"], self.order.id)
@@ -703,10 +714,11 @@ class ApiSmokeTests(TestCase):
 		response = self.api_client.get(reverse("get_kit_pricing_tiers", args=[self.kit.id]), {"kit_id": self.kit.id})
 
 		self.assertEqual(response.status_code, 200)
-		self.assertEqual(len(response.data), 2)
+		self.assertEqual(response.data.get("test_kit_id"), self.kit.id)
+		self.assertEqual(response.data.get("unit_price"), str(self.kit.price))
 
 	def test_get_all_pricing_tiers_returns_every_tier(self):
 		response = self.api_client.get(reverse("get_all_pricing_tiers"))
 
 		self.assertEqual(response.status_code, 200)
-		self.assertEqual(len(response.data), 3)
+		self.assertEqual(response.data.get("message"), "Pricing tiers feature removed")

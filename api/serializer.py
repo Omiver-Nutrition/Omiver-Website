@@ -122,6 +122,7 @@ class OrderSerializer(serializers.ModelSerializer):
     test_kit_name = serializers.CharField(source="test_kit.name", read_only=True)
     biomarker_count = serializers.IntegerField(source="test_kit.biomarker_count", read_only=True)
     barcode_number = serializers.SerializerMethodField()
+    tracking_number = serializers.CharField(source="forward_tracking_number", read_only=True)
 
     def get_barcode_number(self, obj):
         assignment = getattr(obj, "barcode_assignment", None)
@@ -131,7 +132,7 @@ class OrderSerializer(serializers.ModelSerializer):
         model = Order
         fields = [
             "id", "client", "test_kit", "test_kit_name", "biomarker_count", "barcode_number",
-            "order_number", "order_date", "status", "tracking_number",
+            "order_number", "order_date", "status", "forward_tracking_number", "return_tracking_number", "tracking_number",
             "created_at", "updated_at",
         ]
 
@@ -141,6 +142,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     test_kit = TestKitSerializer(read_only=True)
     delivery_events = DeliveryEventSerializer(many=True, read_only=True)
     barcode_number = serializers.SerializerMethodField()
+    tracking_number = serializers.CharField(source="forward_tracking_number", read_only=True)
 
     def get_barcode_number(self, obj):
         assignment = getattr(obj, "barcode_assignment", None)
@@ -150,7 +152,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
         model = Order
         fields = [
             "id", "client", "test_kit", "barcode_number", "order_number", "order_date",
-            "status", "tracking_number", "delivery_events",
+            "status", "forward_tracking_number", "return_tracking_number", "tracking_number", "delivery_events",
             "created_at", "updated_at",
         ]
 
@@ -165,16 +167,19 @@ class OrderCreateSerializer(serializers.ModelSerializer):
     test_kit_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
     barcode_number = serializers.CharField(write_only=True, required=False, allow_blank=True)
     kit_codes = serializers.ListField(child=serializers.CharField(), write_only=True, required=False)
+    tracking_number = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = Order
         fields = [
             "client", "client_id", "test_kit", "test_kit_id",
             "test_kit_name", "barcode_number", "kit_codes", "order_number", "tracking_number",
+            "forward_tracking_number", "return_tracking_number",
         ]
         extra_kwargs = {
             "order_number": {"required": False, "allow_blank": True},
-            "tracking_number": {"required": False, "allow_blank": True},
+            "forward_tracking_number": {"required": False, "allow_blank": True},
+            "return_tracking_number": {"required": False, "allow_blank": True},
         }
 
     def validate(self, attrs):
@@ -200,6 +205,11 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         if not barcode_number and kit_codes:
             barcode_number = str(kit_codes[0]).strip()
             attrs["barcode_number"] = barcode_number
+
+        if not attrs.get("forward_tracking_number"):
+            legacy_tracking_number = str(attrs.get("tracking_number", "")).strip()
+            if legacy_tracking_number:
+                attrs["forward_tracking_number"] = legacy_tracking_number
 
         if not attrs.get("test_kit"):
             barcode_assignment = None
@@ -231,11 +241,15 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         if not barcode_number and kit_codes:
             barcode_number = str(kit_codes[0]).strip()
 
+        forward_tracking_number = validated_data.pop("forward_tracking_number", "") or validated_data.pop("tracking_number", "")
+        return_tracking_number = validated_data.pop("return_tracking_number", "")
+
         order = Order.objects.create(
             client=validated_data["client"],
             test_kit=validated_data["test_kit"],
             order_number=validated_data.get("order_number") or uuid.uuid4().hex[:14],
-            tracking_number=validated_data.get("tracking_number", ""),
+            forward_tracking_number=forward_tracking_number,
+            return_tracking_number=return_tracking_number,
         )
 
         barcode_value = barcode_number or order.order_number
@@ -421,17 +435,3 @@ class ProviderPatientSerializer(serializers.ModelSerializer):
     def get_total_orders(self, obj):
         return obj.orders.count()
 
-
-class PricingTierSerializer(serializers.ModelSerializer):
-    """Serializer for volume discount pricing tiers."""
-    
-    class Meta:
-        model = PricingTier
-        fields = [
-            "id",
-            "test_kit",
-            "min_quantity",
-            "max_quantity",
-            "discount_percent",
-            "created_at",
-        ]

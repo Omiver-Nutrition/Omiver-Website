@@ -166,7 +166,7 @@ class Membership(models.Model):
 
 class ShippingInfo(models.Model):
     id = models.AutoField(primary_key=True)
-    client = models.ForeignKey("Client", on_delete=models.CASCADE)
+    order = models.OneToOneField("Order", on_delete=models.CASCADE, related_name="shipping_info", null=True, blank=True)
     date_shipped = models.DateTimeField()
     tracking_number = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -215,24 +215,13 @@ class TestKit(models.Model):
         return f"{self.name} ({self.biomarker_count} biomarkers)"
     
     def get_price_for_quantity(self, quantity: int) -> Decimal:
-        """Calculate the final price for a given quantity based on volume tiers."""
-        from django.db.models import Q
-        
+        """Calculate the final price for a given quantity.
+
+        Pricing tiers were removed; pricing is now linear by unit.
+        """
         if quantity < 1:
             quantity = 1
-        
-        # Find applicable pricing tier
-        tier = self.pricing_tiers.filter(
-            min_quantity__lte=quantity
-        ).filter(
-            Q(max_quantity__isnull=True) | Q(max_quantity__gte=quantity)
-        ).order_by("-min_quantity").first()
-        if tier:
-            discount_multiplier = (Decimal("100") - tier.discount_percent) / Decimal("100")
-            unit_price = self.price * discount_multiplier
-        else:
-            unit_price = self.price
-        return unit_price * quantity
+        return self.price * quantity
 
 
 class Order(models.Model):
@@ -255,7 +244,8 @@ class Order(models.Model):
     order_date = models.DateTimeField(auto_now_add=True)
     quantity = models.PositiveIntegerField(default=1, help_text="Number of kits ordered")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="PENDING")
-    tracking_number = models.CharField(max_length=100, blank=True)
+    forward_tracking_number = models.CharField(max_length=100, blank=True)
+    return_tracking_number = models.CharField(max_length=100, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -265,12 +255,26 @@ class Order(models.Model):
     def __str__(self):
         return f"Order {self.order_number} – {self.test_kit.name} for {self.client}"
 
+    @property
+    def tracking_number(self):
+        return self.forward_tracking_number
+
+    @tracking_number.setter
+    def tracking_number(self, value):
+        self.forward_tracking_number = value or ""
+
 
 class KitBarcodeAssignment(models.Model):
     """Maps a unique kit barcode to the client/order/test kit that owns it."""
 
     id = models.AutoField(primary_key=True)
-    client = models.ForeignKey("Client", on_delete=models.CASCADE, related_name="kit_barcode_assignments")
+    client = models.ForeignKey(
+        "Client",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="kit_barcode_assignments",
+    )
     order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name="barcode_assignment")
     test_kit = models.ForeignKey(TestKit, on_delete=models.CASCADE, related_name="barcode_assignments")
     barcode_number = models.CharField(max_length=100, unique=True, db_index=True)
@@ -281,7 +285,8 @@ class KitBarcodeAssignment(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"Barcode {self.barcode_number} – {self.client}"
+        client_label = self.client if self.client else "unassigned"
+        return f"Barcode {self.barcode_number} – {client_label}"
 
 
 class DeliveryEvent(models.Model):
@@ -439,25 +444,5 @@ class Recommendation(models.Model):
 
     def __str__(self):
         return f"Recommendation for {self.client}: {self.text}"
-
-
-class PricingTier(models.Model):
-    """Volume discount tiers for B2B ordering."""
-
-    id = models.AutoField(primary_key=True)
-    test_kit = models.ForeignKey(TestKit, on_delete=models.CASCADE, related_name="pricing_tiers")
-    min_quantity = models.PositiveIntegerField(help_text="Minimum quantity for this tier")
-    max_quantity = models.PositiveIntegerField(null=True, blank=True, help_text="Maximum quantity for this tier, null for unlimited")
-    discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Discount percentage (e.g., 5.00 for 5%)")
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ["min_quantity"]
-        unique_together = ("test_kit", "min_quantity")
-
-    def __str__(self):
-        max_qty = f"- {self.max_quantity}" if self.max_quantity else "+"
-        return f"{self.test_kit.name}: {self.min_quantity} {max_qty} kits = {self.discount_percent}% off"
 
 

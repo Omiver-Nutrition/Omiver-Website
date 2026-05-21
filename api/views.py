@@ -16,6 +16,7 @@ from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.core.mail import send_mail
+from django.db.models import Q
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
@@ -32,14 +33,13 @@ from .serializer import (
     BiomarkerSerializer, BiomarkerResultSerializer,
     BiomarkerTestSerializer, BiomarkerTestDetailSerializer,
     ClientPaymentHistorySerializer, ProviderPatientSerializer,
-    PricingTierSerializer,
 )
 from core.models import (
     MealPlan, Client, TestKit, Order, DeliveryEvent,
     KitBarcodeAssignment,
-    PaymentInfo, BillingAddress, Purchase,
+    PaymentInfo, BillingAddress, Purchase, ShippingInfo,
     Biomarker, BiomarkerTest, BiomarkerResult,
-    Membership, Recommendation, PricingTier,
+    Membership, Recommendation,
 )
 from collections import defaultdict
 from datetime import date
@@ -440,37 +440,31 @@ def get_provider_patients(request):
     parameters=[
         OpenApiParameter(name="kit_id", type=int, required=True, description="Test kit ID"),
     ],
-    responses={200: PricingTierSerializer(many=True)},
     tags=["Pricing"],
 )
 @api_view(["GET"])
 def get_kit_pricing_tiers(request, kit_id=None):
-    """Return pricing tiers for a test kit."""
+    """Pricing tiers removed — return unit price for kit."""
     kit_id = request.GET.get("kit_id") or kit_id
-    
     if not kit_id:
         return Response({"error": "kit_id is required"}, status.HTTP_400_BAD_REQUEST)
-    
     try:
         kit = TestKit.objects.get(pk=kit_id)
     except TestKit.DoesNotExist:
         return Response({"error": "Test kit not found"}, status.HTTP_404_NOT_FOUND)
-    
-    tiers = kit.pricing_tiers.all().order_by("min_quantity")
-    return Response(PricingTierSerializer(tiers, many=True).data, status.HTTP_200_OK)
+    return Response({"test_kit_id": kit.id, "unit_price": str(kit.price)}, status.HTTP_200_OK)
 
 
 @extend_schema(
     summary="Get all pricing tiers",
     description="Returns all volume discount pricing tiers across all test kits.",
-    responses={200: PricingTierSerializer(many=True)},
+    responses={200: inline_serializer(name="PricingTiersRemoved", fields={"message": serializers.CharField()})},
     tags=["Pricing"],
 )
 @api_view(["GET"])
 def get_all_pricing_tiers(request):
-    """Return all pricing tiers."""
-    tiers = PricingTier.objects.all().select_related("test_kit").order_by("test_kit", "min_quantity")
-    return Response(PricingTierSerializer(tiers, many=True).data, status.HTTP_200_OK)
+    """Pricing tiers have been removed; return informative message."""
+    return Response({"message": "Pricing tiers feature removed"}, status.HTTP_200_OK)
 
 
 @extend_schema(
@@ -699,7 +693,8 @@ def export_orders_csv(request):
         "order_number",
         "order_date",
         "status",
-        "tracking_number",
+        "forward_tracking_number",
+        "return_tracking_number",
         "quantity",
         "client_id",
         "client_name",
@@ -717,7 +712,8 @@ def export_orders_csv(request):
             _csv_safe(order.order_number),
             order.order_date.isoformat() if order.order_date else "",
             _csv_safe(order.status),
-            _csv_safe(order.tracking_number),
+            _csv_safe(order.forward_tracking_number),
+            _csv_safe(order.return_tracking_number),
             order.quantity,
             order.client_id,
             _csv_safe(client_name),
@@ -786,6 +782,8 @@ def order_detail(request, pk):
             "status": serializers.ChoiceField(choices=[c[0] for c in Order.STATUS_CHOICES]),
             "title": serializers.CharField(required=False),
             "description": serializers.CharField(required=False),
+            "forward_tracking_number": serializers.CharField(required=False, allow_blank=True),
+            "return_tracking_number": serializers.CharField(required=False, allow_blank=True),
             "tracking_number": serializers.CharField(required=False, allow_blank=True),
         },
     ),
@@ -804,12 +802,28 @@ def update_order_status(request, pk):
     if new_status not in dict(Order.STATUS_CHOICES):
         return Response({"error": "Invalid status"}, status.HTTP_400_BAD_REQUEST)
 
-    tracking_number = request.data.get("tracking_number", "").strip()
+    forward_tracking_number = (
+        request.data.get("forward_tracking_number")
+        or request.data.get("tracking_number")
+        or ""
+    ).strip()
+    return_tracking_number = (request.data.get("return_tracking_number") or "").strip()
 
     order.status = new_status
-    if tracking_number:
-        order.tracking_number = tracking_number
+    if forward_tracking_number:
+        order.forward_tracking_number = forward_tracking_number
+    if return_tracking_number:
+        order.return_tracking_number = return_tracking_number
     order.save()
+
+    if new_status == "SHIPPED":
+        ShippingInfo.objects.update_or_create(
+            order=order,
+            defaults={
+                "date_shipped": timezone.now(),
+                "tracking_number": forward_tracking_number or order.forward_tracking_number or "",
+            },
+        )
 
     # Create delivery event
     title = request.data.get("title", dict(Order.STATUS_CHOICES).get(new_status, new_status))
@@ -850,14 +864,17 @@ def track_order(request):
     tracking_number = request.GET.get("tracking_number")
     if not tracking_number:
         return Response({"error": "tracking_number is required"}, status.HTTP_400_BAD_REQUEST)
-    try:
-        order = (
-            Order.objects
-            .select_related("test_kit", "barcode_assignment")
-            .prefetch_related("delivery_events")
-            .get(tracking_number=tracking_number)
+    order = (
+        Order.objects
+        .select_related("test_kit", "barcode_assignment")
+        .prefetch_related("delivery_events")
+        .filter(
+            Q(forward_tracking_number=tracking_number)
+            | Q(return_tracking_number=tracking_number)
         )
-    except Order.DoesNotExist:
+        .first()
+    )
+    if not order:
         return Response({"error": "Order not found"}, status.HTTP_404_NOT_FOUND)
     return Response(OrderDetailSerializer(order).data)
 
@@ -907,6 +924,136 @@ def lookup_barcode(request):
         "assigned_at": assignment.created_at.isoformat() if getattr(assignment, "created_at", None) else None,
     }
     return Response(data, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    summary="Link barcode to client",
+    description="Checks that the barcode exists and links it to the supplied client if unassigned or already owned by that client.",
+    request=inline_serializer(
+        name="BarcodeLinkRequest",
+        fields={
+            "barcode_number": serializers.CharField(),
+            "client_id": serializers.IntegerField(),
+        },
+    ),
+    responses={200: inline_serializer(
+        name="BarcodeLinkResponse",
+        fields={
+            "linked": serializers.BooleanField(),
+            "already_linked": serializers.BooleanField(),
+            "barcode_number": serializers.CharField(),
+            "client_id": serializers.IntegerField(),
+            "order_id": serializers.IntegerField(),
+            "test_kit_id": serializers.IntegerField(),
+            "test_kit_name": serializers.CharField(),
+        },
+    )},
+    tags=["Kits"],
+)
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def link_barcode_assignment(request):
+    barcode_number = (request.data.get("barcode_number") or request.data.get("barcode") or request.data.get("kit_code") or "").strip()
+    client_id = request.data.get("client_id")
+
+    if not barcode_number:
+        return Response({"message": "barcode_number is required"}, status=status.HTTP_400_BAD_REQUEST)
+    if not client_id:
+        return Response({"message": "client_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        client = Client.objects.get(pk=client_id)
+    except Client.DoesNotExist:
+        return Response({"message": "Client not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        assignment = KitBarcodeAssignment.objects.select_related("client", "test_kit", "order").get(barcode_number=barcode_number)
+    except KitBarcodeAssignment.DoesNotExist:
+        return Response({"message": "Barcode not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    if assignment.client_id and assignment.client_id != client.id:
+        return Response({"message": "Barcode is already linked to another client"}, status=status.HTTP_409_CONFLICT)
+
+    already_linked = assignment.client_id == client.id
+    if not already_linked:
+        assignment.client = client
+        assignment.save(update_fields=["client", "updated_at"])
+
+    return Response(
+        {
+            "linked": True,
+            "already_linked": already_linked,
+            "barcode_number": assignment.barcode_number,
+            "client_id": assignment.client_id,
+            "order_id": assignment.order_id,
+            "test_kit_id": assignment.test_kit_id,
+            "test_kit_name": assignment.test_kit.name,
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
+@extend_schema(
+    summary="Create or update kit barcode assignment",
+    description="Attach a barcode to an existing order and its associated client/test kit.",
+    request=inline_serializer(
+        name="BarcodeAssignmentCreateRequest",
+        fields={
+            "kit_code": serializers.CharField(),
+            "barcode_number": serializers.CharField(),
+        },
+    ),
+    responses={200: inline_serializer(
+        name="BarcodeAssignmentCreateResponse",
+        fields={
+            "created": serializers.BooleanField(),
+            "assignment_id": serializers.IntegerField(),
+            "barcode_number": serializers.CharField(),
+            "client_id": serializers.IntegerField(),
+            "order_id": serializers.IntegerField(),
+            "test_kit_id": serializers.IntegerField(),
+            "test_kit_name": serializers.CharField(),
+        },
+    )},
+    tags=["Kits"],
+)
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def create_barcode_assignment(request):
+    kit_code = (request.data.get("kit_code") or request.data.get("order_number") or "").strip()
+    barcode_number = (request.data.get("barcode_number") or request.data.get("barcode") or "").strip()
+
+    if not kit_code:
+        return Response({"message": "kit_code is required"}, status=status.HTTP_400_BAD_REQUEST)
+    if not barcode_number:
+        return Response({"message": "barcode_number is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        order = Order.objects.select_related("client", "test_kit").get(order_number=kit_code)
+    except Order.DoesNotExist:
+        return Response({"message": "Order not found for kit_code"}, status=status.HTTP_404_NOT_FOUND)
+
+    assignment, created = KitBarcodeAssignment.objects.update_or_create(
+        order=order,
+        defaults={
+            "client": order.client,
+            "test_kit": order.test_kit,
+            "barcode_number": barcode_number,
+        },
+    )
+
+    return Response(
+        {
+            "created": created,
+            "assignment_id": assignment.id,
+            "barcode_number": assignment.barcode_number,
+            "client_id": order.client_id,
+            "order_id": order.id,
+            "test_kit_id": order.test_kit_id,
+            "test_kit_name": order.test_kit.name,
+        },
+        status=status.HTTP_200_OK,
+    )
 
 
 # ── Checkout / Purchases ────────────────────────────────────────────────
@@ -1099,7 +1246,8 @@ def confirm_payment(request):
             test_kit=kit,
             order_number=_generate_order_number(),
             quantity=quantity,
-            tracking_number="",
+            forward_tracking_number="",
+            return_tracking_number="",
             status="PENDING",
         )
 
@@ -1193,7 +1341,8 @@ def stripe_webhook(request):
                          client=client,
                          test_kit=kit,
                          order_number=_generate_order_number(),
-                         tracking_number="",
+                         forward_tracking_number="",
+                         return_tracking_number="",
                          status="PENDING",
                      )
 
@@ -1292,7 +1441,8 @@ def checkout(request):
         client=client,
         test_kit=kit,
         order_number=_generate_order_number(),
-        tracking_number="",
+        forward_tracking_number="",
+        return_tracking_number="",
         status="PENDING",
     )
 
