@@ -48,8 +48,8 @@ class OrderAdmin(admin.ModelAdmin):
 
 @admin.register(KitBarcodeAssignment)
 class KitBarcodeAssignmentAdmin(admin.ModelAdmin):
-    list_display = ("barcode_number", "order_number", "client", "order", "test_kit", "created_at")
-    search_fields = ("barcode_number", "order_number", "client__email", "order__order_number", "test_kit__name")
+    list_display = ("barcode_number", "client", "order", "test_kit", "created_at")
+    search_fields = ("barcode_number", "client__email", "order__order_number", "test_kit__name")
     list_filter = ("test_kit",)
     exclude = ("client",)
 

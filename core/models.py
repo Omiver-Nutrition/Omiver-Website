@@ -301,8 +301,7 @@ class KitBarcodeAssignment(models.Model):
         blank=True,
         related_name="kit_barcode_assignments",
     )
-    order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name="barcode_assignment")
-    order_number = models.CharField(max_length=50, blank=True, default="", db_index=True)
+    order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name="barcode_assignment", null=True, blank=True)
     test_kit = models.ForeignKey(TestKit, on_delete=models.CASCADE, related_name="barcode_assignments")
     barcode_number = models.CharField(max_length=100, unique=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -312,7 +311,7 @@ class KitBarcodeAssignment(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        order_label = self.order_number or (self.order.order_number if self.order else "unassigned")
+        order_label = (self.order.order_number if self.order else "unassigned")
         return f"Barcode {self.barcode_number} – {order_label}"
 
 
