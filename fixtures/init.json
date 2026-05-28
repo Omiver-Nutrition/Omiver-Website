@@ -32,7 +32,6 @@
     "fields": {
       "client": 1,
       "order": 2,
-      "order_number": "ORD-002",
       "test_kit": 1,
       "barcode_number": "21191290",
       "created_at": "2024-06-02T00:00:00Z",
