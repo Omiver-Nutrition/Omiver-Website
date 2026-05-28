@@ -28,6 +28,7 @@ from core.models import (
 	Purchase,
 	Recommendation,
 	TestKit,
+	ShippingAddress,
 )
 
 
@@ -264,6 +265,31 @@ class ApiSmokeTests(TestCase):
 		created_client = Client.objects.get(email="new-user@example.com")
 		self.assertEqual(created_client.referred_by, self.provider)
 		self.assertEqual(created_client.user, created_user)
+
+	def test_default_shipping_address_endpoint(self):
+		# create two addresses, one default
+		ShippingAddress.objects.create(
+			client=self.patient,
+			street_address="10 Downing St",
+			city="London",
+			state="",
+			zip_code="SW1A 2AA",
+			is_default=False,
+		)
+		ShippingAddress.objects.create(
+			client=self.patient,
+			street_address="1600 Pennsylvania Ave",
+			city="Washington",
+			state="DC",
+			zip_code="20500",
+			is_default=True,
+		)
+
+		url = reverse("default_shipping_address") + f"?client_id={self.patient.id}"
+		resp = self.public_client.get(url)
+		self.assertEqual(resp.status_code, 200)
+		self.assertEqual(resp.data.get("street_address"), "1600 Pennsylvania Ave")
+
 
 	def test_register_creates_recall_logs(self):
 		payload = {
@@ -566,6 +592,53 @@ class ApiSmokeTests(TestCase):
 		self.assertTrue(Purchase.objects.filter(payment__stripe_payment_intent_id="pi_123").exists())
 		self.assertTrue(PaymentInfo.objects.filter(stripe_payment_intent_id="pi_123").exists())
 
+	@patch("api.views.stripe.PaymentIntent.retrieve")
+	def test_confirm_payment_updates_existing_shipping_country(self, mock_retrieve):
+		mock_retrieve.return_value = SimpleNamespace(
+			status="succeeded",
+			metadata={
+				"test_kit_id": str(self.kit.id),
+				"client_id": str(self.other_client.id),
+				"quantity": "1",
+			},
+			charges=SimpleNamespace(
+				data=[SimpleNamespace(
+					payment_method_details=SimpleNamespace(
+						card=SimpleNamespace(brand="Visa", last4="4242")
+					)
+				)]
+			),
+		)
+
+		existing_address = ShippingAddress.objects.create(
+			client=self.other_client,
+			street_address="1 Payment Way",
+			city="Austin",
+			state="TX",
+			zip_code="78701",
+			country="Old Country",
+			is_default=False,
+		)
+
+		response = self.api_client.post(
+			reverse("confirm_payment"),
+			{
+				"payment_intent_id": "pi_456",
+				"street_address": "1 Payment Way",
+				"city": "Austin",
+				"state": "TX",
+				"zip_code": "78701",
+				"country": "USA",
+				"cardholder_name": "Ari Stone",
+			},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, 201)
+		existing_address.refresh_from_db()
+		self.assertEqual(existing_address.country, "USA")
+		self.assertTrue(existing_address.is_default)
+
 	@patch("api.views.stripe.Webhook.construct_event", side_effect=ValueError("bad payload"))
 	def test_stripe_webhook_invalid_payload_returns_400(self, _mock_construct_event):
 		response = self.public_client.post(
@@ -670,45 +743,6 @@ class ApiSmokeTests(TestCase):
 		self.assertEqual(len(response.data), 1)
 		self.assertEqual(response.data[0]["email"], self.patient.email)
 
-	def test_get_provider_commissions_returns_commissions(self):
-		response = self.api_client.get(reverse("get_provider_commissions"), {"client_id": self.provider.id})
-
-		self.assertEqual(response.status_code, 200)
-		self.assertEqual(len(response.data), 2)
-
-	def test_get_commission_summary_aggregates_statuses(self):
-		response = self.api_client.get(reverse("get_commission_summary"), {"client_id": self.provider.id})
-
-		self.assertEqual(response.status_code, 200)
-		self.assertEqual(response.data["provider_id"], self.provider.id)
-		self.assertEqual(response.data["commission_count"], 2)
-		self.assertGreater(response.data["total_earned"], 0)
-
-	def test_approve_commission_updates_status(self):
-		response = self.api_client.patch(
-			f"{reverse('approve_commission')}?commission_id={self.pending_commission.id}",
-			{},
-			format="json",
-		)
-
-		self.assertEqual(response.status_code, 200)
-		self.pending_commission.refresh_from_db()
-		self.assertEqual(self.pending_commission.status, "APPROVED")
-
-	@patch("api.views.stripe.Transfer.create")
-	def test_process_commission_payout_marks_commission_paid(self, mock_transfer_create):
-		mock_transfer_create.return_value = SimpleNamespace(id="tr_123")
-
-		response = self.api_client.post(
-			reverse("process_commission_payout"),
-			{"commission_id": self.approved_commission.id, "stripe_account_id": "acct_123"},
-			format="json",
-		)
-
-		self.assertEqual(response.status_code, 200)
-		self.approved_commission.refresh_from_db()
-		self.assertEqual(self.approved_commission.status, "PAID")
-		self.assertEqual(self.approved_commission.stripe_transfer_id, "tr_123")
 
 	def test_get_kit_pricing_tiers_returns_kit_tiers(self):
 		response = self.api_client.get(reverse("get_kit_pricing_tiers", args=[self.kit.id]), {"kit_id": self.kit.id})

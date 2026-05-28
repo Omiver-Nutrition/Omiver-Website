@@ -257,6 +257,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             order=order,
             defaults={
                 "client": validated_data["client"],
+                "order_number": order.order_number,
                 "test_kit": validated_data["test_kit"],
                 "barcode_number": barcode_value,
             },
@@ -434,4 +435,11 @@ class ProviderPatientSerializer(serializers.ModelSerializer):
 
     def get_total_orders(self, obj):
         return obj.orders.count()
+
+
+class ShippingAddressSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ShippingAddress
+        fields = ["id", "client", "label", "street_address", "city", "state", "zip_code", "country", "is_default", "created_at"]
+
 

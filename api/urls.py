@@ -42,6 +42,9 @@ urlpatterns = [
     path("confirm-payment", views.confirm_payment, name="confirm_payment"),
     path("stripe-webhook", views.stripe_webhook, name="stripe_webhook"),
 
+    path("shipping-addresses", views.list_shipping_addresses, name="list_shipping_addresses"),
+    path("shipping-address", views.default_shipping_address, name="default_shipping_address"),
+
     path("purchases", views.purchase_history, name="purchase_history"),
     path("purchases/<int:pk>", views.purchase_detail, name="purchase_detail"),
     # biomarkers & dashboard
@@ -57,5 +60,7 @@ urlpatterns = [
     # pricing
     path("pricing/tiers", views.get_all_pricing_tiers, name="get_all_pricing_tiers"),
     path("pricing/tiers/<int:kit_id>", views.get_kit_pricing_tiers, name="get_kit_pricing_tiers"),
+
+    # commissions (removed)
 ]
 

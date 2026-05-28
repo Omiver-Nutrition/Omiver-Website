@@ -33,11 +33,13 @@ from .serializer import (
     BiomarkerSerializer, BiomarkerResultSerializer,
     BiomarkerTestSerializer, BiomarkerTestDetailSerializer,
     ClientPaymentHistorySerializer, ProviderPatientSerializer,
+    ShippingAddressSerializer,
 )
 from core.models import (
     MealPlan, Client, TestKit, Order, DeliveryEvent,
     KitBarcodeAssignment,
     PaymentInfo, BillingAddress, Purchase, ShippingInfo,
+    ShippingAddress,
     Biomarker, BiomarkerTest, BiomarkerResult,
     Membership, Recommendation,
 )
@@ -920,6 +922,7 @@ def lookup_barcode(request):
         "client_id": assignment.client.id if assignment.client else None,
         "client_name": client_name,
         "order_id": assignment.order.id if assignment.order else None,
+        "order_number": assignment.order_number or (assignment.order.order_number if assignment.order else None),
         "test_kit": assignment.test_kit.name if assignment.test_kit else None,
         "assigned_at": assignment.created_at.isoformat() if getattr(assignment, "created_at", None) else None,
     }
@@ -986,6 +989,7 @@ def link_barcode_assignment(request):
             "barcode_number": assignment.barcode_number,
             "client_id": assignment.client_id,
             "order_id": assignment.order_id,
+            "order_number": assignment.order_number or (assignment.order.order_number if assignment.order else None),
             "test_kit_id": assignment.test_kit_id,
             "test_kit_name": assignment.test_kit.name,
         },
@@ -1037,6 +1041,7 @@ def create_barcode_assignment(request):
         order=order,
         defaults={
             "client": order.client,
+            "order_number": order.order_number,
             "test_kit": order.test_kit,
             "barcode_number": barcode_number,
         },
@@ -1049,6 +1054,7 @@ def create_barcode_assignment(request):
             "barcode_number": assignment.barcode_number,
             "client_id": order.client_id,
             "order_id": order.id,
+            "order_number": assignment.order_number or order.order_number,
             "test_kit_id": order.test_kit_id,
             "test_kit_name": order.test_kit.name,
         },
@@ -1240,6 +1246,43 @@ def confirm_payment(request):
             state=data.get("state"),
             zip_code=data.get("zip_code"),
         )
+
+        # Persist shipping address for client so it can be used to prefill future orders.
+        try:
+            ship_street = data.get("street_address")
+            ship_city = data.get("city")
+            ship_state = data.get("state")
+            ship_zip = data.get("zip_code")
+            ship_country = data.get("country") or ""
+
+            if ship_street and ship_city and ship_zip:
+                # If an identical address exists, mark it default; otherwise create and mark default
+                existing = ShippingAddress.objects.filter(client=client, street_address=ship_street, city=ship_city, zip_code=ship_zip).first()
+                # Clear existing defaults
+                ShippingAddress.objects.filter(client=client).update(is_default=False)
+                if existing:
+                    fields_to_update = ["is_default", "updated_at"]
+                    if existing.state != ship_state:
+                        existing.state = ship_state
+                        fields_to_update.append("state")
+                    if existing.country != ship_country:
+                        existing.country = ship_country
+                        fields_to_update.append("country")
+                    existing.is_default = True
+                    existing.save(update_fields=fields_to_update)
+                else:
+                    ShippingAddress.objects.create(
+                        client=client,
+                        street_address=ship_street,
+                        city=ship_city,
+                        state=ship_state,
+                        zip_code=ship_zip,
+                        country=ship_country,
+                        is_default=True,
+                    )
+        except Exception:
+            # Do not block checkout if address persistence fails
+            pass
 
         order = Order.objects.create(
             client=client,
@@ -1691,6 +1734,58 @@ def client_payments(request):
         .order_by("-created_at")
     )
     return Response(ClientPaymentHistorySerializer(payments, many=True).data)
+
+
+@extend_schema(
+    summary="List Client Shipping Addresses",
+    description="Return saved shipping addresses for a client.",
+    parameters=[
+        OpenApiParameter(name="client_id", type=int, required=True, description="Client ID"),
+    ],
+    responses={200: ShippingAddressSerializer(many=True)},
+    tags=["Clients"],
+)
+@api_view(["GET"])
+def list_shipping_addresses(request):
+    client_id = request.GET.get("client_id")
+    if not client_id:
+        return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
+    addresses = ShippingAddress.objects.filter(client_id=client_id).order_by("-is_default", "-created_at")
+    return Response(ShippingAddressSerializer(addresses, many=True).data)
+
+
+@extend_schema(
+    summary="Get Client Default Shipping Address",
+    description="Return the client's default shipping address (or most recent) for prefilling checkout.",
+    parameters=[
+        OpenApiParameter(name="client_id", type=int, required=False, description="Client ID (optional for authenticated users)"),
+    ],
+    responses={200: ShippingAddressSerializer, 400: None},
+    tags=["Clients"],
+)
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def default_shipping_address(request):
+    client_id = request.GET.get("client_id")
+    if not client_id:
+        # Try to derive from authenticated user
+        if request.user and request.user.is_authenticated:
+            try:
+                client = Client.objects.get(user=request.user)
+                client_id = client.id
+            except Client.DoesNotExist:
+                return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
+        else:
+            return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
+
+    addr = ShippingAddress.objects.filter(client_id=client_id, is_default=True).first()
+    if not addr:
+        addr = ShippingAddress.objects.filter(client_id=client_id).order_by("-created_at").first()
+
+    if not addr:
+        return Response({}, status.HTTP_200_OK)
+
+    return Response(ShippingAddressSerializer(addr).data, status.HTTP_200_OK)
 
 
 @extend_schema(

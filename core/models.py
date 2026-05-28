@@ -133,6 +133,32 @@ class BillingAddress(models.Model):
     def __str__(self):
         return f"{self.street_address}, {self.city}, {self.state} {self.zip_code}"
 
+class ShippingAddress(models.Model):
+    """Postal addresses for clients (multiple addresses per client)."""
+
+    id = models.AutoField(primary_key=True)
+    client = models.ForeignKey(
+        "Client",
+        on_delete=models.CASCADE,
+        related_name="shipping_addresses",
+    )
+    label = models.CharField(max_length=50, blank=True, help_text="Label like 'Home' or 'Work'")
+    street_address = models.CharField(max_length=300)
+    city = models.CharField(max_length=100)
+    state = models.CharField(max_length=100, blank=True)
+    zip_code = models.CharField(max_length=20, blank=True)
+    country = models.CharField(max_length=100, blank=True)
+    is_default = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        label = self.label or "Address"
+        return f"{label} — {self.street_address}, {self.city}"
+
 
 class Purchase(models.Model):
     """Ties a checkout transaction together: client + test kit + payment + billing → order."""
@@ -276,6 +302,7 @@ class KitBarcodeAssignment(models.Model):
         related_name="kit_barcode_assignments",
     )
     order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name="barcode_assignment")
+    order_number = models.CharField(max_length=50, blank=True, default="", db_index=True)
     test_kit = models.ForeignKey(TestKit, on_delete=models.CASCADE, related_name="barcode_assignments")
     barcode_number = models.CharField(max_length=100, unique=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -285,8 +312,8 @@ class KitBarcodeAssignment(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        client_label = self.client if self.client else "unassigned"
-        return f"Barcode {self.barcode_number} – {client_label}"
+        order_label = self.order_number or (self.order.order_number if self.order else "unassigned")
+        return f"Barcode {self.barcode_number} – {order_label}"
 
 
 class DeliveryEvent(models.Model):
