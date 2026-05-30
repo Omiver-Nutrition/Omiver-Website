@@ -314,6 +314,10 @@ class KitBarcodeAssignment(models.Model):
         order_label = (self.order.order_number if self.order else "unassigned")
         return f"Barcode {self.barcode_number} – {order_label}"
 
+    @property
+    def order_number(self):
+        return self.order.order_number if self.order else None
+
 
 class DeliveryEvent(models.Model):
     """Individual delivery milestone (e.g. 'Order Placed', 'Kit Delivered')."""
