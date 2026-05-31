@@ -211,6 +211,10 @@ class DietLog(models.Model):
     def __str__(self):
         return f"Diet log for {self.client} at {self.created_at}"
 
+    @property
+    def recorded_at(self):
+        return self.created_at
+
 
 class ExerciseLog(models.Model):
     id = models.AutoField(primary_key=True)
@@ -223,6 +227,10 @@ class ExerciseLog(models.Model):
 
     def __str__(self):
         return f"Exercise log for {self.client} at {self.created_at}"
+
+    @property
+    def recorded_at(self):
+        return self.created_at
 
 
 class TestKit(models.Model):
@@ -304,6 +312,7 @@ class KitBarcodeAssignment(models.Model):
     order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name="barcode_assignment", null=True, blank=True)
     test_kit = models.ForeignKey(TestKit, on_delete=models.CASCADE, related_name="barcode_assignments")
     barcode_number = models.CharField(max_length=100, unique=True, db_index=True)
+    collected_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -367,8 +376,6 @@ class Client(models.Model):
     health_conditions = models.TextField(max_length=100, blank=True)
     dietary_preferences = models.TextField(max_length=100, blank=True)
     allergies = models.TextField(max_length=100, blank=True)
-    dietary_recall = models.TextField(blank=True)
-    exercise_recall = models.TextField(blank=True)
     dietary_typicality = models.PositiveSmallIntegerField(null=True, blank=True, help_text="How typical the 24-hour recall is on a 5-level scale from unusual to always")
     dietary_preference_mode = models.CharField(max_length=20, blank=True, help_text="Whether the client wants similar or different recommendations")
     preferred_cuisines = models.TextField(blank=True)

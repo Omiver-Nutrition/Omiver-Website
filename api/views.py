@@ -498,8 +498,6 @@ def login_handler(request):
         token, _ = Token.objects.get_or_create(user=user)
         client_serializer = ClientSerializer(client)
         request.session["client_id"] = client.id
-        print(f"-----debug session client_id set to {client.id} -----")
-        print(f"-----debug session data: {request.session.items()} -----")
         return Response({
             **client_serializer.data,
             "token": token.key,

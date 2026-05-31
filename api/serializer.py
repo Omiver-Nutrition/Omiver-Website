@@ -10,6 +10,8 @@ from django.contrib.auth.models import User
 class ClientSerializer(serializers.ModelSerializer):
     # Write-only: accept a provider's referral code when a patient registers.
     referred_by_code = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    dietary_recall = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
+    exercise_recall = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
 
     def _store_recall_logs(self, instance, dietary_recall=None, exercise_recall=None):
         if dietary_recall is not None and str(dietary_recall).strip():
@@ -34,8 +36,8 @@ class ClientSerializer(serializers.ModelSerializer):
         latest_exercise_log = instance.exercise_logs.first()
         data["dietary_recall"] = latest_diet_log.recall if latest_diet_log else ""
         data["exercise_recall"] = latest_exercise_log.recall if latest_exercise_log else ""
-        data["dietary_recall_created_at"] = latest_diet_log.created_at if latest_diet_log else None
-        data["exercise_recall_created_at"] = latest_exercise_log.created_at if latest_exercise_log else None
+        data["dietary_recall_created_at"] = latest_diet_log.recorded_at if latest_diet_log else None
+        data["exercise_recall_created_at"] = latest_exercise_log.recorded_at if latest_exercise_log else None
         return data
 
     class Meta:
@@ -385,16 +387,10 @@ class ProviderPatientSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
     latest_test_date = serializers.SerializerMethodField()
     total_orders = serializers.SerializerMethodField()
-
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-        latest_diet_log = instance.diet_logs.first()
-        latest_exercise_log = instance.exercise_logs.first()
-        data["dietary_recall"] = latest_diet_log.recall if latest_diet_log else ""
-        data["exercise_recall"] = latest_exercise_log.recall if latest_exercise_log else ""
-        data["dietary_recall_created_at"] = latest_diet_log.created_at if latest_diet_log else None
-        data["exercise_recall_created_at"] = latest_exercise_log.created_at if latest_exercise_log else None
-        return data
+    dietary_recall = serializers.SerializerMethodField()
+    exercise_recall = serializers.SerializerMethodField()
+    dietary_recall_created_at = serializers.SerializerMethodField()
+    exercise_recall_created_at = serializers.SerializerMethodField()
 
     class Meta:
         model = Client
@@ -412,6 +408,9 @@ class ProviderPatientSerializer(serializers.ModelSerializer):
             "health_conditions",
             "dietary_preferences",
             "dietary_recall",
+            "exercise_recall",
+            "dietary_recall_created_at",
+            "exercise_recall_created_at",
             "dietary_typicality",
             "dietary_preference_mode",
             "preferred_cuisines",
@@ -435,6 +434,22 @@ class ProviderPatientSerializer(serializers.ModelSerializer):
 
     def get_total_orders(self, obj):
         return obj.orders.count()
+
+    def get_dietary_recall(self, obj):
+        latest_diet_log = obj.diet_logs.first()
+        return latest_diet_log.recall if latest_diet_log else ""
+
+    def get_exercise_recall(self, obj):
+        latest_exercise_log = obj.exercise_logs.first()
+        return latest_exercise_log.recall if latest_exercise_log else ""
+
+    def get_dietary_recall_created_at(self, obj):
+        latest_diet_log = obj.diet_logs.first()
+        return latest_diet_log.recorded_at if latest_diet_log else None
+
+    def get_exercise_recall_created_at(self, obj):
+        latest_exercise_log = obj.exercise_logs.first()
+        return latest_exercise_log.recorded_at if latest_exercise_log else None
 
 
 class ShippingAddressSerializer(serializers.ModelSerializer):

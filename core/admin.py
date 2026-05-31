@@ -1,6 +1,12 @@
 from django.contrib import admin
+from django.contrib import messages
+from django.http import HttpResponseRedirect
 from django.db import transaction
+from django.urls import path, reverse
+from django.utils import timezone
+from django.utils.html import format_html
 from .models import (
+    Client,
     TestKit, Order, KitBarcodeAssignment, DeliveryEvent, ShippingInfo, PaymentInfo, BillingAddress, Purchase, ShippingAddress,
     DietLog, ExerciseLog,
     Biomarker, BiomarkerTest, BiomarkerResult,
@@ -28,6 +34,15 @@ class ShippingInfoAdmin(admin.ModelAdmin):
 @admin.register(TestKit)
 class TestKitAdmin(admin.ModelAdmin):
     list_display = ("name", "biomarker_count", "price")
+    search_fields = ("name",)
+
+
+@admin.register(Client)
+class ClientAdmin(admin.ModelAdmin):
+    list_display = ("email", "first_name", "last_name", "type", "referral_code", "created_at")
+    search_fields = ("email", "first_name", "last_name", "referral_code")
+    list_filter = ("type", "created_at")
+    readonly_fields = ("created_at", "updated_at")
 
 
 @admin.register(Order)
@@ -48,10 +63,41 @@ class OrderAdmin(admin.ModelAdmin):
 
 @admin.register(KitBarcodeAssignment)
 class KitBarcodeAssignmentAdmin(admin.ModelAdmin):
-    list_display = ("barcode_number", "client", "order", "test_kit", "created_at")
+    list_display = ("barcode_number", "client", "order", "test_kit", "collected_at", "mark_collected_link", "created_at")
     search_fields = ("barcode_number", "client__email", "order__order_number", "test_kit__name")
     list_filter = ("test_kit",)
-    exclude = ("client",)
+    raw_id_fields = ("client", "order")
+    autocomplete_fields = ("test_kit",)
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                "<int:assignment_id>/mark-collected/",
+                self.admin_site.admin_view(self.mark_collected_view),
+                name="core_kitbarcodeassignment_mark_collected",
+            ),
+        ]
+        return custom_urls + urls
+
+    def mark_collected_link(self, obj):
+        if obj.collected_at:
+            return obj.collected_at.strftime("%Y-%m-%d %H:%M:%S")
+        url = reverse("admin:core_kitbarcodeassignment_mark_collected", args=[obj.id])
+        return format_html('<a class="button" href="{}">Sample Collected</a>', url)
+
+    mark_collected_link.short_description = "Sample Collected"
+
+    def mark_collected_view(self, request, assignment_id):
+        assignment = self.get_queryset(request).filter(pk=assignment_id).first()
+        if assignment is None:
+            self.message_user(request, "Barcode assignment not found.", level=messages.ERROR)
+            return HttpResponseRedirect(reverse("admin:core_kitbarcodeassignment_changelist"))
+
+        assignment.collected_at = timezone.now()
+        assignment.save(update_fields=["collected_at", "updated_at"])
+        self.message_user(request, f"Marked {assignment.barcode_number} as collected.", level=messages.SUCCESS)
+        return HttpResponseRedirect(reverse("admin:core_kitbarcodeassignment_changelist"))
 
 
 @admin.register(ShippingAddress)
