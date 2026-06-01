@@ -996,6 +996,77 @@ def link_barcode_assignment(request):
 
 
 @extend_schema(
+    summary="Mark barcode assignment as collected",
+    description="Updates the collected_at timestamp for a linked barcode assignment.",
+    request=inline_serializer(
+        name="BarcodeCollectedRequest",
+        fields={
+            "barcode_number": serializers.CharField(),
+            "client_id": serializers.IntegerField(required=False),
+            "collected_at": serializers.DateTimeField(required=False),
+        },
+    ),
+    responses={200: inline_serializer(
+        name="BarcodeCollectedResponse",
+        fields={
+            "collected": serializers.BooleanField(),
+            "barcode_number": serializers.CharField(),
+            "collected_at": serializers.DateTimeField(),
+            "assignment_id": serializers.IntegerField(),
+            "client_id": serializers.IntegerField(required=False, allow_null=True),
+            "order_id": serializers.IntegerField(required=False, allow_null=True),
+            "test_kit_id": serializers.IntegerField(),
+            "test_kit_name": serializers.CharField(),
+        },
+    )},
+    tags=["Kits"],
+)
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def mark_barcode_collected(request):
+    barcode_number = (request.data.get("barcode_number") or request.data.get("barcode") or request.data.get("kit_code") or "").strip()
+    client_id = request.data.get("client_id")
+    collected_at_raw = request.data.get("collected_at")
+
+    if not barcode_number:
+        return Response({"message": "barcode_number is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        assignment = KitBarcodeAssignment.objects.select_related("client", "test_kit", "order").get(barcode_number=barcode_number)
+    except KitBarcodeAssignment.DoesNotExist:
+        return Response({"message": "Barcode not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    if client_id and assignment.client_id and assignment.client_id != int(client_id):
+        return Response({"message": "Barcode is linked to another client"}, status=status.HTTP_409_CONFLICT)
+
+    collected_at = timezone.now()
+    if collected_at_raw:
+        parsed_collected_at = parse_datetime(str(collected_at_raw))
+        if parsed_collected_at is None:
+            return Response({"message": "collected_at must be an ISO 8601 datetime"}, status=status.HTTP_400_BAD_REQUEST)
+        if timezone.is_naive(parsed_collected_at):
+            parsed_collected_at = timezone.make_aware(parsed_collected_at, timezone.get_current_timezone())
+        collected_at = parsed_collected_at
+
+    assignment.collected_at = collected_at
+    assignment.save(update_fields=["collected_at", "updated_at"])
+
+    return Response(
+        {
+            "collected": True,
+            "barcode_number": assignment.barcode_number,
+            "collected_at": assignment.collected_at,
+            "assignment_id": assignment.id,
+            "client_id": assignment.client_id,
+            "order_id": assignment.order_id,
+            "test_kit_id": assignment.test_kit_id,
+            "test_kit_name": assignment.test_kit.name,
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
+@extend_schema(
     summary="Create or update kit barcode assignment",
     description="Attach a barcode to an existing order and its associated client/test kit.",
     request=inline_serializer(

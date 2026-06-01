@@ -20,6 +20,7 @@ urlpatterns = [
     path("verify-kit-code", views.verify_kit_code, name="verify_kit_code"),
     path("barcode/lookup", views.lookup_barcode, name="lookup_barcode"),
     path("barcode/link", views.link_barcode_assignment, name="link_barcode_assignment"),
+    path("barcode/collect", views.mark_barcode_collected, name="mark_barcode_collected"),
     path("barcode/assign", views.create_barcode_assignment, name="create_barcode_assignment"),
     path("login", views.login_handler, name="login"),
     path("logout", views.logout_handler, name="logout"),

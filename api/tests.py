@@ -478,6 +478,31 @@ class ApiSmokeTests(TestCase):
 		self.assertEqual(created_order.barcode_assignment.barcode_number, barcode)
 		self.assertEqual(created_order.delivery_events.count(), 1)
 
+	def test_mark_barcode_collected_updates_timestamp(self):
+		assignment = KitBarcodeAssignment.objects.create(
+			client=self.patient,
+			order=self.order,
+			test_kit=self.kit,
+			barcode_number="21191290",
+		)
+
+		collected_at = timezone.now().replace(microsecond=0)
+		response = self.api_client.post(
+			reverse("mark_barcode_collected"),
+			{
+				"barcode_number": assignment.barcode_number,
+				"client_id": self.patient.id,
+				"collected_at": collected_at.isoformat(),
+			},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, 200)
+		assignment.refresh_from_db()
+		self.assertIsNotNone(assignment.collected_at)
+		self.assertEqual(assignment.collected_at.replace(microsecond=0), collected_at)
+		self.assertEqual(response.data["barcode_number"], assignment.barcode_number)
+
 	def test_order_detail_returns_nested_events(self):
 		response = self.api_client.get(reverse("order_detail", args=[self.order.id]))
 
