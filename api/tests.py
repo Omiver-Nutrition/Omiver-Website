@@ -329,6 +329,13 @@ class ApiSmokeTests(TestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertFalse(response.data["isValid"])
 
+	def test_validate_referral_code_ignores_invalid_auth_header(self):
+		self.public_client.credentials(HTTP_AUTHORIZATION="Token invalid-token")
+		response = self.public_client.get(reverse("validate_referral_code"), {"code": self.provider.referral_code})
+
+		self.assertEqual(response.status_code, 200)
+		self.assertTrue(response.data["isValid"])
+
 	def test_verify_kit_code_reports_valid_order_number(self):
 		response = self.public_client.get(reverse("verify_kit_code"), {"code": self.order.order_number})
 
