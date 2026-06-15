@@ -13,9 +13,11 @@ from django.contrib.auth import authenticate, login
 from django.contrib.auth import logout
 from django.contrib.auth.models import User
 from django.contrib.auth.tokens import default_token_generator
+from django.contrib.auth.password_validation import validate_password
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.core.mail import send_mail
+from django.core.exceptions import ValidationError
 from django.db.models import Q
 from rest_framework import status
 from rest_framework.response import Response
@@ -153,9 +155,13 @@ def client_handler(request, pk):
 
 def register_user(username, password):
     if not username or not password:
-        return None, "Username and password are required"
+        return None, {"message": "Username and password are required"}
     if User.objects.filter(username=username).exists():
-        return None, "Username already exists"
+        return None, {"message": "Username already exists"}
+    try:
+        validate_password(password, user=User(username=username))
+    except ValidationError as exc:
+        return None, {"password": exc.messages}
     user = User.objects.create_user(username=username, password=password)
     return user, None
 
@@ -323,6 +329,11 @@ def password_reset_confirm(request):
 
     if not default_token_generator.check_token(user, token):
         return Response({"message": "Invalid or expired token"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        validate_password(new_password, user=user)
+    except ValidationError as exc:
+        return Response({"password": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
 
     user.set_password(new_password)
     user.save()

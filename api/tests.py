@@ -5,9 +5,12 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
+from django.contrib.auth.tokens import default_token_generator
 from django.test import TestCase
 from django.urls import reverse
+from django.utils.encoding import force_bytes
 from django.utils import timezone
+from django.utils.http import urlsafe_base64_encode
 from rest_framework.test import APIClient
 
 from core.models import (
@@ -265,6 +268,33 @@ class ApiSmokeTests(TestCase):
 		created_client = Client.objects.get(email="new-user@example.com")
 		self.assertEqual(created_client.referred_by, self.provider)
 		self.assertEqual(created_client.user, created_user)
+
+	def test_register_rejects_weak_passwords(self):
+		payload = {
+			"username": "weak-user@example.com",
+			"password": "short",
+			"email": "weak-user@example.com",
+			"first_name": "Weak",
+			"last_name": "User",
+			"type": "INDIVIDUAL",
+		}
+		response = self.public_client.post(reverse("register"), payload, format="json")
+
+		self.assertEqual(response.status_code, 400)
+		self.assertIn("password", response.data)
+		self.assertFalse(User.objects.filter(username="weak-user@example.com").exists())
+
+	def test_password_reset_confirm_rejects_weak_passwords(self):
+		user = User.objects.create_user(username="reset-user@example.com", password="secret123")
+		payload = {
+			"uid": urlsafe_base64_encode(force_bytes(user.pk)),
+			"token": default_token_generator.make_token(user),
+			"new_password": "short",
+		}
+		response = self.public_client.post(reverse("password_reset_confirm"), payload, format="json")
+
+		self.assertEqual(response.status_code, 400)
+		self.assertIn("password", response.data)
 
 	def test_default_shipping_address_endpoint(self):
 		# create two addresses, one default
