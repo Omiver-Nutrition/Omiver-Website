@@ -119,21 +119,81 @@ class DeliveryEventSerializer(serializers.ModelSerializer):
         fields = ["id", "event_type", "title", "description", "timestamp", "is_completed"]
 
 
+class KitCollectionSerializer(serializers.ModelSerializer):
+    dietary_recall = serializers.CharField(source="diet_log.recall", read_only=True, allow_null=True)
+    exercise_recall = serializers.CharField(source="exercise_log.recall", read_only=True, allow_null=True)
+
+    class Meta:
+        model = KitCollection
+        fields = [
+            "id", "user", "order", "kit_barcode", "status",
+            "diet_log", "exercise_log", "shipping_event",
+            "dietary_recall", "exercise_recall",
+            "created_at", "updated_at",
+        ]
+
+
+class KitResultSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = KitResult
+        fields = ["id", "kit_barcode", "result_info", "created_at", "updated_at"]
+
+
 class OrderSerializer(serializers.ModelSerializer):
     """Used for list views — lightweight."""
     test_kit_name = serializers.CharField(source="test_kit.name", read_only=True)
     biomarker_count = serializers.IntegerField(source="test_kit.biomarker_count", read_only=True)
     barcode_number = serializers.SerializerMethodField()
     tracking_number = serializers.CharField(source="forward_tracking_number", read_only=True)
+    kit_barcode = serializers.SerializerMethodField()
+    collection_status = serializers.SerializerMethodField()
+    diet_log_id = serializers.SerializerMethodField()
+    exercise_log_id = serializers.SerializerMethodField()
+    shipping_event_id = serializers.SerializerMethodField()
+    result_info = serializers.SerializerMethodField()
 
     def get_barcode_number(self, obj):
         assignment = getattr(obj, "barcode_assignment", None)
         return assignment.barcode_number if assignment else None
 
+    def _collection(self, obj):
+        return getattr(obj, "kit_collection", None)
+
+    def get_kit_barcode(self, obj):
+        collection = self._collection(obj)
+        if collection and collection.kit_barcode:
+            return collection.kit_barcode
+        assignment = getattr(obj, "barcode_assignment", None)
+        return assignment.barcode_number if assignment else None
+
+    def get_collection_status(self, obj):
+        collection = self._collection(obj)
+        return collection.status if collection else None
+
+    def get_diet_log_id(self, obj):
+        collection = self._collection(obj)
+        return collection.diet_log_id if collection else None
+
+    def get_exercise_log_id(self, obj):
+        collection = self._collection(obj)
+        return collection.exercise_log_id if collection else None
+
+    def get_shipping_event_id(self, obj):
+        collection = self._collection(obj)
+        return collection.shipping_event_id if collection else None
+
+    def get_result_info(self, obj):
+        collection = self._collection(obj)
+        if not collection:
+            return None
+        result = KitResult.objects.filter(kit_barcode=collection.kit_barcode).first()
+        return result.result_info if result else None
+
     class Meta:
         model = Order
         fields = [
             "id", "client", "test_kit", "test_kit_name", "biomarker_count", "barcode_number",
+            "kit_barcode", "collection_status", "diet_log_id", "exercise_log_id", "shipping_event_id", "result_info",
             "order_number", "order_date", "status", "forward_tracking_number", "return_tracking_number", "tracking_number",
             "created_at", "updated_at",
         ]
@@ -145,15 +205,55 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     delivery_events = DeliveryEventSerializer(many=True, read_only=True)
     barcode_number = serializers.SerializerMethodField()
     tracking_number = serializers.CharField(source="forward_tracking_number", read_only=True)
+    kit_barcode = serializers.SerializerMethodField()
+    collection_status = serializers.SerializerMethodField()
+    diet_log_id = serializers.SerializerMethodField()
+    exercise_log_id = serializers.SerializerMethodField()
+    shipping_event_id = serializers.SerializerMethodField()
+    result_info = serializers.SerializerMethodField()
 
     def get_barcode_number(self, obj):
         assignment = getattr(obj, "barcode_assignment", None)
         return assignment.barcode_number if assignment else None
 
+    def _collection(self, obj):
+        return getattr(obj, "kit_collection", None)
+
+    def get_kit_barcode(self, obj):
+        collection = self._collection(obj)
+        if collection and collection.kit_barcode:
+            return collection.kit_barcode
+        assignment = getattr(obj, "barcode_assignment", None)
+        return assignment.barcode_number if assignment else None
+
+    def get_collection_status(self, obj):
+        collection = self._collection(obj)
+        return collection.status if collection else None
+
+    def get_diet_log_id(self, obj):
+        collection = self._collection(obj)
+        return collection.diet_log_id if collection else None
+
+    def get_exercise_log_id(self, obj):
+        collection = self._collection(obj)
+        return collection.exercise_log_id if collection else None
+
+    def get_shipping_event_id(self, obj):
+        collection = self._collection(obj)
+        return collection.shipping_event_id if collection else None
+
+    def get_result_info(self, obj):
+        collection = self._collection(obj)
+        if not collection:
+            return None
+        result = KitResult.objects.filter(kit_barcode=collection.kit_barcode).first()
+        return result.result_info if result else None
+
     class Meta:
         model = Order
         fields = [
-            "id", "client", "test_kit", "barcode_number", "order_number", "order_date",
+            "id", "client", "test_kit", "barcode_number", "kit_barcode", "collection_status",
+            "diet_log_id", "exercise_log_id", "shipping_event_id", "result_info", "order_number", "order_date",
             "status", "forward_tracking_number", "return_tracking_number", "tracking_number", "delivery_events",
             "created_at", "updated_at",
         ]
