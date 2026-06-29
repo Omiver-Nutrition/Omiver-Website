@@ -63,5 +63,15 @@ urlpatterns = [
     path("pricing/tiers/<int:kit_id>", views.get_kit_pricing_tiers, name="get_kit_pricing_tiers"),
 
     # commissions (removed)
+
+    # KitCollection Endpoints
+    path("collection/<int:order_id>", views.get_kit_collection, name="get_kit_collection"),
+    path("collection/scan", views.collection_scan, name="collection_scan"),
+    path("collection/log", views.collection_log, name="collection_log"),
+    path("collection/ship", views.collection_ship_return, name="collection_ship_return"),
+
+    # Vendor Endpoints
+    path("vendor/receive", views.vendor_receive_kit, name="vendor_receive_kit"),
+    path("vendor/finish", views.vendor_finish_kit, name="vendor_finish_kit"),
 ]
 

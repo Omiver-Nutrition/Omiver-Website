@@ -40,6 +40,7 @@ from .serializer import (
 from core.models import (
     MealPlan, Client, TestKit, Order, DeliveryEvent,
     KitBarcodeAssignment,
+    KitCollection, KitResult, DietLog, ExerciseLog,
     PaymentInfo, BillingAddress, Purchase, ShippingInfo,
     ShippingAddress,
     Biomarker, BiomarkerTest, BiomarkerResult,
@@ -661,7 +662,11 @@ def list_orders(request):
     client_id = request.GET.get("client_id")
     if not client_id:
         return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
-    orders = Order.objects.filter(client_id=client_id).select_related("test_kit", "barcode_assignment")
+    orders = Order.objects.filter(
+        Q(client_id=client_id) |
+        Q(barcode_assignment__client_id=client_id) |
+        Q(kit_collection__user_id=client_id)
+    ).distinct().select_related("test_kit", "barcode_assignment")
     return Response(OrderSerializer(orders, many=True).data)
 
 
@@ -673,6 +678,91 @@ def _csv_safe(value):
     if text.startswith(("=", "+", "-", "@")):
         return f"'{text}"
     return text
+
+
+def _kit_status_to_order_status(status: str) -> str:
+    if status in dict(Order.STATUS_CHOICES):
+        return status
+    return {
+        "SHIPPED": "SHIPPING",
+        "IN_TRANSIT": "SHIPPING",
+        "OUT_FOR_DELIVERY": "SHIPPING",
+    }.get(status, status)
+
+
+def _ensure_collection_for_order(order: Order, kit_barcode: str | None = None) -> KitCollection:
+    barcode_value = (kit_barcode or getattr(getattr(order, "barcode_assignment", None), "barcode_number", "") or order.order_number).strip()
+    collection, _ = KitCollection.objects.get_or_create(
+        order=order,
+        defaults={
+            "user": order.client,
+            "kit_barcode": barcode_value,
+            "status": order.status if order.status in dict(KitCollection.STATUS_CHOICES) else "CREATED",
+        },
+    )
+    updates = []
+    if collection.user_id != order.client_id:
+        collection.user = order.client
+        updates.append("user")
+    if barcode_value and collection.kit_barcode != barcode_value:
+        collection.kit_barcode = barcode_value
+        updates.append("kit_barcode")
+    if updates:
+        collection.save(update_fields=updates + ["updated_at"])
+    return collection
+
+
+def _sync_collection_state(
+    order: Order,
+    *,
+    status: str | None = None,
+    kit_barcode: str | None = None,
+    dietary_recall: str | None = None,
+    exercise_recall: str | None = None,
+    shipping_tracking_number: str | None = None,
+    result_info: str | None = None,
+) -> KitCollection:
+    collection = _ensure_collection_for_order(order, kit_barcode=kit_barcode)
+    update_fields = []
+
+    if status:
+        collection.status = status
+        update_fields.append("status")
+        order.status = _kit_status_to_order_status(status)
+
+    if dietary_recall is not None and str(dietary_recall).strip():
+        diet_log = DietLog.objects.create(client=order.client, recall=str(dietary_recall).strip())
+        collection.diet_log = diet_log
+        update_fields.append("diet_log")
+
+    if exercise_recall is not None and str(exercise_recall).strip():
+        exercise_log = ExerciseLog.objects.create(client=order.client, recall=str(exercise_recall).strip())
+        collection.exercise_log = exercise_log
+        update_fields.append("exercise_log")
+
+    if shipping_tracking_number is not None:
+        shipping_info, _ = ShippingInfo.objects.update_or_create(
+            order=order,
+            defaults={
+                "date_shipped": timezone.now(),
+                "tracking_number": shipping_tracking_number.strip(),
+            },
+        )
+        collection.shipping_event = shipping_info
+        update_fields.append("shipping_event")
+        order.forward_tracking_number = shipping_tracking_number.strip()
+
+    if result_info is not None:
+        KitResult.objects.update_or_create(
+            kit_barcode=collection.kit_barcode,
+            defaults={"result_info": result_info},
+        )
+        if status is None:
+            order.status = "FINISHED"
+
+    collection.save(update_fields=list(dict.fromkeys(update_fields + ["updated_at"])))
+    order.save()
+    return collection
 
 
 @extend_schema(
@@ -753,6 +843,17 @@ def create_order(request):
     if not serializer.is_valid():
         return Response(serializer.errors, status.HTTP_400_BAD_REQUEST)
     order = serializer.save()
+    order.status = "CREATED"
+    order.save(update_fields=["status"])
+
+    kit_barcode = "KIT-" + uuid.uuid4().hex[:8].upper()
+    KitBarcodeAssignment.objects.create(
+        client=order.client,
+        order=order,
+        test_kit=order.test_kit,
+        barcode_number=kit_barcode
+    )
+    _ensure_collection_for_order(order, kit_barcode=kit_barcode)
 
     # Seed initial delivery event
     DeliveryEvent.objects.create(
@@ -991,6 +1092,15 @@ def link_barcode_assignment(request):
     if not already_linked:
         assignment.client = client
         assignment.save(update_fields=["client", "updated_at"])
+
+    if not assignment.order:
+        assignment.order = Order.objects.create(
+            client=client,
+            test_kit=assignment.test_kit,
+            order_number=_generate_order_number(),
+            status="DELIVERED",
+        )
+        assignment.save(update_fields=["order", "updated_at"])
 
     return Response(
         {
@@ -1567,8 +1677,18 @@ def checkout(request):
         order_number=_generate_order_number(),
         forward_tracking_number="",
         return_tracking_number="",
-        status="PENDING",
+        status="CREATED", # Changed from PENDING to CREATED based on user prompt
     )
+
+    # Assign barcode and KitCollection
+    kit_barcode = "KIT-" + uuid.uuid4().hex[:8].upper()
+    KitBarcodeAssignment.objects.create(
+        client=client,
+        order=order,
+        test_kit=kit,
+        barcode_number=kit_barcode
+    )
+    _ensure_collection_for_order(order, kit_barcode=kit_barcode)
 
     # Seed first delivery event
     DeliveryEvent.objects.create(
@@ -1776,7 +1896,11 @@ def client_dashboard(request):
             health_score = round((optimal_count / total_markers) * 100)
 
     # ── Recent orders ───────────────────────────────────────────────
-    recent_orders = Order.objects.filter(client=client).select_related("test_kit")[:5]
+    recent_orders = Order.objects.filter(
+        Q(client=client) |
+        Q(barcode_assignment__client=client) |
+        Q(kit_collection__user=client)
+    ).distinct().select_related("test_kit")[:5]
 
     # ── Recommendations ─────────────────────────────────────────────
     recommendations = list(Recommendation.objects.filter(client=client).values_list('text', flat=True))
@@ -1897,6 +2021,96 @@ def client_memberships(request):
         for m in memberships
     ]
     return Response(data)
+
+@api_view(["GET"])
+@permission_classes([AllowAny]) # usually IsAuthenticated
+def get_kit_collection(request, order_id):
+    try:
+        order = Order.objects.get(pk=order_id)
+    except Order.DoesNotExist:
+        return Response({"error": "Order not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    collection = _ensure_collection_for_order(order)
+    return Response(KitCollectionSerializer(collection).data)
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def collection_scan(request):
+    kit_barcode = request.data.get("kit_barcode")
+    order_id = request.data.get("order_id")
+
+    try:
+        order = Order.objects.get(pk=order_id)
+    except Order.DoesNotExist:
+        return Response({"error": "Order not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    collection = _sync_collection_state(order, status="DELIVERED", kit_barcode=kit_barcode)
+    return Response(KitCollectionSerializer(collection).data)
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def collection_log(request):
+    order_id = request.data.get("order_id")
+    dietary_recall = request.data.get("dietary_recall")
+    exercise_recall = request.data.get("exercise_recall")
+
+    try:
+        order = Order.objects.get(pk=order_id)
+    except Order.DoesNotExist:
+        return Response({"error": "Order not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    collection = _sync_collection_state(order, status="PENDING", dietary_recall=dietary_recall, exercise_recall=exercise_recall)
+    return Response(KitCollectionSerializer(collection).data)
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def collection_ship_return(request):
+    order_id = request.data.get("order_id")
+    tracking_number = request.data.get("tracking_number") or _generate_tracking_number()
+
+    try:
+        order = Order.objects.get(pk=order_id)
+    except Order.DoesNotExist:
+        return Response({"error": "Order not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    collection = _sync_collection_state(order, status="SHIPPING", shipping_tracking_number=tracking_number)
+    order.return_tracking_number = tracking_number
+    order.save(update_fields=["return_tracking_number"])
+    return Response(KitCollectionSerializer(collection).data)
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_receive_kit(request):
+    kit_barcode = request.data.get("kit_barcode")
+    try:
+        collection = KitCollection.objects.get(kit_barcode=kit_barcode)
+    except KitCollection.DoesNotExist:
+        return Response({"error": "Kit not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    if collection.order:
+        _sync_collection_state(collection.order, status="TESTING")
+    else:
+        collection.status = "TESTING"
+        collection.save()
+    return Response({"status": "TESTING"})
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_finish_kit(request):
+    kit_barcode = request.data.get("kit_barcode")
+    result_info = request.data.get("result_info")
+    try:
+        collection = KitCollection.objects.get(kit_barcode=kit_barcode)
+    except KitCollection.DoesNotExist:
+        return Response({"error": "Kit not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    if collection.order:
+        _sync_collection_state(collection.order, status="FINISHED", result_info=result_info)
+    else:
+        collection.status = "FINISHED"
+        collection.save()
+        KitResult.objects.create(kit_barcode=kit_barcode, result_info=result_info)
+    return Response({"status": "FINISHED"})
 
 
 

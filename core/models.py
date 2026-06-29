@@ -262,7 +262,13 @@ class Order(models.Model):
     """Represents a placed test-kit order with shipping/tracking info."""
 
     STATUS_CHOICES = [
+        ("CREATED", "Created"),
+        ("SHIPPING", "Shipping"),
+        ("DELIVERED", "Delivered"),
+        ("COLLECTED", "Collected"),
         ("PENDING", "Pending"),
+        ("TESTING", "Testing"),
+        ("FINISHED", "Finished"),
         ("CONFIRMED", "Order Confirmed"),
         ("SHIPPED", "Shipped"),
         ("IN_TRANSIT", "In Transit"),
@@ -353,6 +359,53 @@ class DeliveryEvent(models.Model):
     def __str__(self):
         status = "✓" if self.is_completed else "…"
         return f"[{status}] {self.title} – Order {self.order.order_number}"
+
+
+class KitCollection(models.Model):
+    """Tracks the lifecycle of a kit barcode for a client and order."""
+
+    STATUS_CHOICES = [
+        ("CREATED", "Created"),
+        ("SHIPPING", "Shipping"),
+        ("DELIVERED", "Delivered"),
+        ("COLLECTED", "Collected"),
+        ("PENDING", "Pending"),
+        ("TESTING", "Testing"),
+        ("FINISHED", "Finished"),
+    ]
+
+    id = models.AutoField(primary_key=True)
+    user = models.ForeignKey("Client", on_delete=models.CASCADE, related_name="kit_collections")
+    order = models.OneToOneField("Order", on_delete=models.CASCADE, related_name="kit_collection", null=True, blank=True)
+    kit_barcode = models.CharField(max_length=100, unique=True, db_index=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="CREATED")
+    diet_log = models.OneToOneField("DietLog", on_delete=models.SET_NULL, null=True, blank=True, related_name="kit_collection")
+    exercise_log = models.OneToOneField("ExerciseLog", on_delete=models.SET_NULL, null=True, blank=True, related_name="kit_collection")
+    shipping_event = models.ForeignKey("ShippingInfo", on_delete=models.SET_NULL, null=True, blank=True, related_name="kit_collections")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Kit collection {self.kit_barcode} – {self.status}"
+
+
+class KitResult(models.Model):
+    """Stores the final result payload for a kit barcode."""
+
+    id = models.AutoField(primary_key=True)
+    kit_barcode = models.CharField(max_length=100, unique=True, db_index=True)
+    result_info = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Result for {self.kit_barcode}"
 
 class Client(models.Model):
     USER_TYPES = [("PROVIDER", "healthcare"), ("INDIVIDUAL", "individual")]
