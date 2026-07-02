@@ -35,7 +35,7 @@ from .serializer import (
     BiomarkerSerializer, BiomarkerResultSerializer,
     BiomarkerTestSerializer, BiomarkerTestDetailSerializer,
     ClientPaymentHistorySerializer, ProviderPatientSerializer,
-    ShippingAddressSerializer,
+    ShippingAddressSerializer, RecommendationSerializer,
 )
 from core.models import (
     MealPlan, Client, TestKit, Order, DeliveryEvent,
@@ -81,6 +81,7 @@ def index(request):
 )
 @api_view(["GET"])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def verify_kit_code(request):
     """Verify if a kit code (order number) exists in the database."""
     code = request.query_params.get("code", "").strip()
@@ -214,6 +215,7 @@ def create_client_helper(data):
 )
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def register(request):
     """register user
 
@@ -272,6 +274,7 @@ def register(request):
 )
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def password_reset_request(request):
     email = (request.data.get("email") or "").strip()
     if not email:
@@ -315,6 +318,7 @@ def password_reset_request(request):
 )
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def password_reset_confirm(request):
     uid = request.data.get("uid")
     token = request.data.get("token")
@@ -497,6 +501,7 @@ def get_all_pricing_tiers(request):
 )
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def login_handler(request):
     print(request)
     data = request.data
@@ -529,6 +534,7 @@ def login_handler(request):
 )
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def logout_handler(request):
     try:
         logout(request)
@@ -571,6 +577,7 @@ def verify_token_handler(request):
 )
 @api_view(["GET"])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def check_email(request):
     """Check if a username (email) already exists.
 
@@ -641,6 +648,8 @@ def meal_plan(request):
     tags=["Test Kits"],
 )
 @api_view(["GET"])
+@permission_classes([AllowAny])
+@authentication_classes([])
 def list_kits(request):
     """Return all available test kits."""
     kits = TestKit.objects.all()
@@ -1014,6 +1023,7 @@ def track_order(request):
 )
 @api_view(["GET"])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def lookup_barcode(request):
     barcode = (request.GET.get("barcode") or "").strip()
     if not barcode:
@@ -1066,6 +1076,7 @@ def lookup_barcode(request):
 )
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def link_barcode_assignment(request):
     barcode_number = (request.data.get("barcode_number") or request.data.get("barcode") or request.data.get("kit_code") or "").strip()
     client_id = request.data.get("client_id")
@@ -1145,6 +1156,7 @@ def link_barcode_assignment(request):
 )
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def mark_barcode_collected(request):
     barcode_number = (request.data.get("barcode_number") or request.data.get("barcode") or request.data.get("kit_code") or "").strip()
     client_id = request.data.get("client_id")
@@ -1214,6 +1226,7 @@ def mark_barcode_collected(request):
 )
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def create_barcode_assignment(request):
     kit_code = (request.data.get("kit_code") or request.data.get("order_number") or "").strip()
     barcode_number = (request.data.get("barcode_number") or request.data.get("barcode") or "").strip()
@@ -1232,7 +1245,6 @@ def create_barcode_assignment(request):
         order=order,
         defaults={
             "client": order.client,
-            "order_number": order.order_number,
             "test_kit": order.test_kit,
             "barcode_number": barcode_number,
         },
@@ -1514,6 +1526,7 @@ def confirm_payment(request):
 @csrf_exempt
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def stripe_webhook(request):
     payload = request.body
     sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')
@@ -1970,6 +1983,7 @@ def list_shipping_addresses(request):
 )
 @api_view(["GET"])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def default_shipping_address(request):
     client_id = request.GET.get("client_id")
     if not client_id:
@@ -2111,6 +2125,166 @@ def vendor_finish_kit(request):
         collection.save()
         KitResult.objects.create(kit_barcode=kit_barcode, result_info=result_info)
     return Response({"status": "FINISHED"})
+
+
+from api.ai_utils import generate_ai_recommendation_draft, regenerate_ai_recommendation_with_feedback
+
+@extend_schema(
+    summary="Get recommendations list",
+    description="Get recommendations for a client, filtered by biomarker test. If requested by patient, only APPROVED status recommendations are returned. If requested by provider, any status draft is returned.",
+    parameters=[
+        OpenApiParameter(name="client_id", type=int, required=True, description="Client ID"),
+        OpenApiParameter(name="biomarker_test_id", type=int, required=False, description="Optional BiomarkerTest ID"),
+    ],
+    responses={200: RecommendationSerializer(many=True)},
+    tags=["Recommendations"],
+)
+@api_view(["GET"])
+@permission_classes([AllowAny]) # usually IsAuthenticated
+@authentication_classes([])
+def get_recommendations(request):
+    client_id = request.GET.get("client_id")
+    test_id = request.GET.get("biomarker_test_id") or request.GET.get("test_id")
+    requesting_client_id = request.GET.get("requesting_client_id") # for mock simplicity or session client
+    
+    if not client_id:
+        return Response({"error": "client_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+    try:
+        patient = Client.objects.get(pk=client_id)
+    except Client.DoesNotExist:
+        return Response({"error": "Patient not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    # Resolve requesting user role
+    req_client = None
+    if requesting_client_id:
+        req_client = Client.objects.filter(pk=requesting_client_id).first()
+    elif request.user.is_authenticated:
+        req_client = getattr(request.user, "client", None)
+    elif request.session.get("client_id"):
+        req_client = Client.objects.filter(pk=request.session["client_id"]).first()
+
+    # Determine access level
+    is_provider = req_client and req_client.type == "PROVIDER"
+    
+    recs = Recommendation.objects.filter(client=patient)
+    if test_id:
+        recs = recs.filter(biomarker_test_id=test_id)
+        
+    # Enforce approval filter for individual patients
+    if not is_provider:
+        recs = recs.filter(status="APPROVED")
+        
+    return Response(RecommendationSerializer(recs, many=True).data)
+
+
+@extend_schema(
+    summary="Submit doctor feedback and regenerate AI recommendations",
+    description="Allows a PROVIDER (doctor) to input adjustment notes and regenerate the recommendation draft via AI.",
+    request=inline_serializer(
+        name="SubmitFeedbackRequest",
+        fields={
+            "doctor_feedback": serializers.CharField(),
+        },
+    ),
+    responses={200: RecommendationSerializer()},
+    tags=["Recommendations"],
+)
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def submit_doctor_feedback_api(request, pk):
+    doctor_feedback = request.data.get("doctor_feedback")
+    if not doctor_feedback:
+        return Response({"error": "doctor_feedback is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+    try:
+        rec = Recommendation.objects.get(pk=pk)
+    except Recommendation.DoesNotExist:
+        return Response({"error": "Recommendation not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    rec_updated = regenerate_ai_recommendation_with_feedback(rec.id, doctor_feedback)
+    if not rec_updated:
+        return Response({"error": "Failed to regenerate recommendations"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+    return Response(RecommendationSerializer(rec_updated).data)
+
+
+@extend_schema(
+    summary="Approve and publish AI recommendation",
+    description="Approves a recommendation draft and moves it to APPROVED, making it visible to the patient. Optionally attach direct notes.",
+    request=inline_serializer(
+        name="ApproveRecommendationRequest",
+        fields={
+            "doctor_notes": serializers.CharField(required=False, allow_blank=True),
+        },
+    ),
+    responses={200: RecommendationSerializer()},
+    tags=["Recommendations"],
+)
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def approve_recommendation_api(request, pk):
+    doctor_notes = request.data.get("doctor_notes") or ""
+    provider_id = request.data.get("provider_id") # for mock simplicity or session client
+    
+    try:
+        rec = Recommendation.objects.get(pk=pk)
+    except Recommendation.DoesNotExist:
+        return Response({"error": "Recommendation not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    provider = None
+    if provider_id:
+        provider = Client.objects.filter(pk=provider_id, type="PROVIDER").first()
+    elif request.user.is_authenticated:
+        provider = getattr(request.user, "client", None)
+        if provider and provider.type != "PROVIDER":
+            provider = None
+            
+    rec.status = "APPROVED"
+    rec.dietary_final = rec.dietary_draft
+    rec.exercise_final = rec.exercise_draft
+    rec.doctor_notes = doctor_notes
+    if provider:
+        rec.approved_by = provider
+    rec.approved_at = timezone.now()
+    rec.save()
+    
+    return Response(RecommendationSerializer(rec).data)
+
+
+@extend_schema(
+    summary="Generate initial AI recommendation draft",
+    description="Manually triggers the initial AI recommendation draft generation for a specific biomarker test run.",
+    request=inline_serializer(
+        name="GenerateRecommendationRequest",
+        fields={
+            "biomarker_test_id": serializers.IntegerField(),
+        },
+    ),
+    responses={200: RecommendationSerializer()},
+    tags=["Recommendations"],
+)
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def generate_recommendation_draft_api(request):
+    test_id = request.data.get("biomarker_test_id") or request.data.get("test_id")
+    if not test_id:
+        return Response({"error": "biomarker_test_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+    try:
+        test = BiomarkerTest.objects.get(pk=test_id)
+    except BiomarkerTest.DoesNotExist:
+        return Response({"error": "BiomarkerTest not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+    rec = generate_ai_recommendation_draft(test.id)
+    if not rec:
+        return Response({"error": "Failed to generate recommendations"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+    return Response(RecommendationSerializer(rec).data)
+
 
 
 

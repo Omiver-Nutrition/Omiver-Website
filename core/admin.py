@@ -73,6 +73,11 @@ class KitBarcodeAssignmentAdmin(admin.ModelAdmin):
         urls = super().get_urls()
         custom_urls = [
             path(
+                "import-csv/",
+                self.admin_site.admin_view(self.import_csv_view),
+                name="core_kitbarcodeassignment_import_csv",
+            ),
+            path(
                 "<int:assignment_id>/mark-collected/",
                 self.admin_site.admin_view(self.mark_collected_view),
                 name="core_kitbarcodeassignment_mark_collected",
@@ -98,6 +103,154 @@ class KitBarcodeAssignmentAdmin(admin.ModelAdmin):
         assignment.save(update_fields=["collected_at", "updated_at"])
         self.message_user(request, f"Marked {assignment.barcode_number} as collected.", level=messages.SUCCESS)
         return HttpResponseRedirect(reverse("admin:core_kitbarcodeassignment_changelist"))
+
+    def import_csv_view(self, request):
+        import csv
+        import io
+        from django.utils.dateparse import parse_datetime
+        from api.ai_utils import generate_ai_recommendation_draft
+        from django.template.response import TemplateResponse
+
+        if request.method == "POST":
+            csv_file = request.FILES.get("csv_file")
+            if not csv_file:
+                self.message_user(request, "No CSV file selected.", level=messages.ERROR)
+                return HttpResponseRedirect(reverse("admin:core_kitbarcodeassignment_changelist"))
+
+            try:
+                # Read file as text
+                file_data = csv_file.read().decode("utf-8")
+                csv_reader = csv.DictReader(io.StringIO(file_data))
+                
+                # Check for required headers
+                headers = [h.strip().lower() for h in csv_reader.fieldnames] if csv_reader.fieldnames else []
+                required = ["barcode_number", "biomarker_name", "value", "recorded_at"]
+                if not all(r in headers for r in required):
+                    self.message_user(
+                        request, 
+                        f"Invalid CSV format. Required headers: {', '.join(required)}. Found: {', '.join(headers)}", 
+                        level=messages.ERROR
+                    )
+                    return HttpResponseRedirect(reverse("admin:core_kitbarcodeassignment_changelist"))
+
+                imported_rows = 0
+                tests_to_trigger = []
+
+                # Group values in memory by (client, recorded_at)
+                grouped_data = {}
+
+                for row_idx, row in enumerate(csv_reader, start=1):
+                    # Handle case-insensitive header mapping
+                    row_clean = {k.strip().lower(): v.strip() if v else "" for k, v in row.items() if k}
+                    
+                    barcode = row_clean.get("barcode_number")
+                    biomarker_name = row_clean.get("biomarker_name")
+                    value_str = row_clean.get("value")
+                    recorded_at_str = row_clean.get("recorded_at")
+
+                    if not barcode or not biomarker_name or not value_str or not recorded_at_str:
+                        # Skip empty rows or log warning
+                        continue
+
+                    # 1. Look up barcode assignment
+                    try:
+                        assignment = KitBarcodeAssignment.objects.select_related("client").get(barcode_number=barcode)
+                    except KitBarcodeAssignment.DoesNotExist:
+                        self.message_user(request, f"Row {row_idx}: Barcode '{barcode}' not found in Omiver system. Skipped.", level=messages.WARNING)
+                        continue
+
+                    client = assignment.client
+                    if not client:
+                        self.message_user(request, f"Row {row_idx}: Barcode '{barcode}' is not linked to any client. Skipped.", level=messages.WARNING)
+                        continue
+
+                    # 2. Parse recorded_at
+                    recorded_at = parse_datetime(recorded_at_str)
+                    if not recorded_at:
+                        self.message_user(request, f"Row {row_idx}: Invalid date format '{recorded_at_str}'. Skipped.", level=messages.WARNING)
+                        continue
+
+                    # 3. Parse value
+                    try:
+                        value = float(value_str)
+                    except ValueError:
+                        self.message_user(request, f"Row {row_idx}: Invalid numeric value '{value_str}'. Skipped.", level=messages.WARNING)
+                        continue
+
+                    # Group key
+                    key = (client.id, recorded_at)
+                    if key not in grouped_data:
+                        grouped_data[key] = {
+                            "client": client,
+                            "recorded_at": recorded_at,
+                            "results": []
+                        }
+                    
+                    grouped_data[key]["results"].append((biomarker_name, value))
+
+                # Now process each group transactionally
+                tests_created = 0
+                results_created = 0
+
+                for (client_id, recorded_at), info in grouped_data.items():
+                    client = info["client"]
+                    recorded_at = info["recorded_at"]
+                    
+                    with transaction.atomic():
+                        # Find or create BiomarkerTest run
+                        test, created = BiomarkerTest.objects.get_or_create(
+                            client=client,
+                            recorded_at=recorded_at
+                        )
+                        if created:
+                            tests_created += 1
+
+                        for bm_name, val in info["results"]:
+                            # Look up or create Biomarker
+                            bm = Biomarker.objects.filter(name__iexact=bm_name).first()
+                            if not bm:
+                                bm = Biomarker.objects.create(
+                                    name=bm_name,
+                                    category="OTHER",
+                                    range_min=0.0,
+                                    range_max=100.0,
+                                    optimal_min=20.0,
+                                    optimal_max=80.0,
+                                    unit="units"
+                                )
+
+                            # Create or update BiomarkerResult
+                            BiomarkerResult.objects.update_or_create(
+                                test=test,
+                                biomarker=bm,
+                                defaults={"value": val}
+                            )
+                            results_created += 1
+
+                        tests_to_trigger.append(test.id)
+
+                # 4. Trigger AI recommendation drafts for the imported tests!
+                triggered_count = 0
+                for tid in tests_to_trigger:
+                    rec = generate_ai_recommendation_draft(tid)
+                    if rec:
+                        triggered_count += 1
+
+                self.message_user(
+                    request,
+                    f"Successfully processed CSV. Created/Updated {tests_created} biomarker tests with {results_created} biomarker results, and successfully generated {triggered_count} AI recommendation drafts!",
+                    level=messages.SUCCESS
+                )
+
+            except Exception as e:
+                self.message_user(request, f"Failed to process CSV file: {e}", level=messages.ERROR)
+
+            return HttpResponseRedirect(reverse("admin:core_kitbarcodeassignment_changelist"))
+
+        # GET request: render file upload template
+        context = self.admin_site.each_context(request)
+        context["title"] = "Import TASSO CSV Results"
+        return TemplateResponse(request, "admin/core/kitbarcodeassignment/import_csv.html", context)
 
 
 @admin.register(ShippingAddress)

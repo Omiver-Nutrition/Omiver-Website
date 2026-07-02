@@ -41,11 +41,11 @@ class ApiSmokeTests(TestCase):
 
 		self.web_user = User.objects.create_user(
 			username="staff@example.com",
-			password="secret123",
+			password="OmiverSecure2026!",
 		)
 		self.login_user = User.objects.create_user(
 			username="login@example.com",
-			password="secret123",
+			password="OmiverSecure2026!",
 		)
 
 		self.api_client.force_authenticate(user=self.web_user)
@@ -206,7 +206,7 @@ class ApiSmokeTests(TestCase):
 		self.assertEqual(response.content.decode("utf-8"), "Welcome to the API endpoint!")
 
 	def test_protected_endpoint_requires_authentication(self):
-		response = self.public_client.get(reverse("list_kits"))
+		response = self.public_client.get(reverse("list_biomarker_tests"))
 
 		self.assertEqual(response.status_code, 401)
 
@@ -254,7 +254,7 @@ class ApiSmokeTests(TestCase):
 	def test_register_creates_auth_user_and_client(self):
 		payload = {
 			"username": "new-user@example.com",
-			"password": "secret123",
+			"password": "OmiverSecure2026!",
 			"email": "new-user@example.com",
 			"first_name": "New",
 			"last_name": "User",
@@ -285,7 +285,7 @@ class ApiSmokeTests(TestCase):
 		self.assertFalse(User.objects.filter(username="weak-user@example.com").exists())
 
 	def test_password_reset_confirm_rejects_weak_passwords(self):
-		user = User.objects.create_user(username="reset-user@example.com", password="secret123")
+		user = User.objects.create_user(username="reset-user@example.com", password="OmiverSecure2026!")
 		payload = {
 			"uid": urlsafe_base64_encode(force_bytes(user.pk)),
 			"token": default_token_generator.make_token(user),
@@ -295,6 +295,28 @@ class ApiSmokeTests(TestCase):
 
 		self.assertEqual(response.status_code, 400)
 		self.assertIn("password", response.data)
+
+	def test_password_reset_request_sends_email(self):
+		user = User.objects.create_user(username="reset-request@example.com", email="reset-request@example.com", password="OmiverSecure2026!")
+		payload = {
+			"email": "reset-request@example.com",
+		}
+		response = self.public_client.post(reverse("password_reset_request"), payload, format="json")
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data["message"], "If that email exists, a reset link has been sent.")
+
+	def test_password_reset_confirm_success(self):
+		user = User.objects.create_user(username="reset-success@example.com", password="OmiverSecure2026!")
+		payload = {
+			"uid": urlsafe_base64_encode(force_bytes(user.pk)),
+			"token": default_token_generator.make_token(user),
+			"new_password": "NewOmiverSecure2026!",
+		}
+		response = self.public_client.post(reverse("password_reset_confirm"), payload, format="json")
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data["message"], "Password has been reset successfully")
+		user.refresh_from_db()
+		self.assertTrue(user.check_password("NewOmiverSecure2026!"))
 
 	def test_default_shipping_address_endpoint(self):
 		# create two addresses, one default
@@ -323,9 +345,9 @@ class ApiSmokeTests(TestCase):
 
 	def test_register_creates_recall_logs(self):
 		payload = {
-			"username": "recall-user@example.com",
-			"password": "secret123",
-			"email": "recall-user@example.com",
+			"email": "recall@example.com",
+			"username": "recall@example.com",
+			"password": "OmiverSecure2026!",
 			"first_name": "Recall",
 			"last_name": "User",
 			"type": "INDIVIDUAL",
@@ -335,7 +357,7 @@ class ApiSmokeTests(TestCase):
 		response = self.public_client.post(reverse("register"), payload, format="json")
 
 		self.assertEqual(response.status_code, 201)
-		created_client = Client.objects.get(email="recall-user@example.com")
+		created_client = Client.objects.get(email="recall@example.com")
 		self.assertEqual(DietLog.objects.filter(client=created_client).count(), 1)
 		self.assertEqual(ExerciseLog.objects.filter(client=created_client).count(), 1)
 		self.assertEqual(DietLog.objects.filter(client=created_client).first().recall, "Oatmeal and berries")
@@ -390,7 +412,7 @@ class ApiSmokeTests(TestCase):
 	def test_login_handler_returns_client_data(self):
 		response = self.public_client.post(
 			reverse("login"),
-			{"username": self.login_user.username, "password": "secret123"},
+			{"username": self.login_user.username, "password": "OmiverSecure2026!"},
 			format="json",
 		)
 
@@ -818,3 +840,154 @@ class ApiSmokeTests(TestCase):
 
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(response.data.get("message"), "Pricing tiers feature removed")
+
+	def test_client_handler_collection_finished_at(self):
+		# Create a KitBarcodeAssignment linked to self.patient
+		assignment = KitBarcodeAssignment.objects.create(
+			client=self.patient,
+			test_kit=self.kit,
+			barcode_number="TESTFINISHEDAT123"
+		)
+
+		collected_at_str = "2026-07-02T12:34:56Z"
+		
+		# Patch collection_finished_at
+		patch_response = self.api_client.patch(
+			reverse("client_handler", args=[self.patient.id]),
+			{"collection_finished_at": collected_at_str},
+			format="json",
+		)
+		self.assertEqual(patch_response.status_code, 200)
+
+		# Check that assignment was updated in DB
+		assignment.refresh_from_db()
+		self.assertIsNotNone(assignment.collected_at)
+		self.assertEqual(assignment.collected_at.strftime("%Y-%m-%dT%H:%M:%SZ"), "2026-07-02T12:34:56Z")
+
+		# Check that GET representation includes collection_finished_at
+		get_response = self.api_client.get(reverse("client_handler", args=[self.patient.id]))
+		self.assertEqual(get_response.status_code, 200)
+		self.assertTrue(get_response.data["collection_finished_at"].startswith("2026-07-02T12:34:56"))
+
+	def test_ai_recommendation_workflow(self):
+		# Delete any setup recommendations to isolate this test
+		Recommendation.objects.filter(client=self.patient).delete()
+
+		# 1. Trigger generate recommendations draft via API
+		response = self.api_client.post(
+			reverse("generate_recommendation_draft_api"),
+			{"test_id": self.biomarker_test.id},
+			format="json"
+		)
+		self.assertEqual(response.status_code, 200)
+		rec_id = response.data["id"]
+		self.assertEqual(response.data["status"], "DRAFT")
+		self.assertIsNotNone(response.data["dietary_draft"])
+		self.assertIsNotNone(response.data["exercise_draft"])
+
+		# 2. Get recommendations as Patient: should be empty since not APPROVED yet
+		patient_response = self.api_client.get(
+			reverse("get_recommendations"),
+			{"client_id": self.patient.id},
+			format="json"
+		)
+		self.assertEqual(patient_response.status_code, 200)
+		self.assertEqual(len(patient_response.data), 0)
+
+		# 3. Get recommendations as Doctor (or passing requesting_client_id): should see the draft!
+		doc_response = self.api_client.get(
+			reverse("get_recommendations"),
+			{
+				"client_id": self.patient.id,
+				"requesting_client_id": self.provider.id
+			},
+			format="json"
+		)
+		self.assertEqual(doc_response.status_code, 200)
+		self.assertEqual(len(doc_response.data), 1)
+		self.assertEqual(doc_response.data[0]["id"], rec_id)
+
+		# 4. Submit Doctor Feedback (regenerate)
+		feedback_response = self.api_client.post(
+			reverse("submit_doctor_feedback_api", args=[rec_id]),
+			{"doctor_feedback": "Please add more low-impact swimming exercises"},
+			format="json"
+		)
+		self.assertEqual(feedback_response.status_code, 200)
+		self.assertEqual(feedback_response.data["status"], "PENDING_REVIEW")
+		self.assertEqual(feedback_response.data["doctor_feedback"], "Please add more low-impact swimming exercises")
+
+		# 5. Approve recommendation
+		approve_response = self.api_client.post(
+			reverse("approve_recommendation_api", args=[rec_id]),
+			{
+				"doctor_notes": "Highly recommend adhering to the swimming routine.",
+				"provider_id": self.provider.id
+			},
+			format="json"
+		)
+		self.assertEqual(approve_response.status_code, 200)
+		self.assertEqual(approve_response.status_code, 200)
+		self.assertEqual(approve_response.data["status"], "APPROVED")
+		self.assertEqual(approve_response.data["doctor_notes"], "Highly recommend adhering to the swimming routine.")
+		self.assertIsNotNone(approve_response.data["dietary_final"])
+		self.assertIsNotNone(approve_response.data["exercise_final"])
+
+		# 6. Now get recommendations as Patient: should be visible!
+		patient_approved_response = self.api_client.get(
+			reverse("get_recommendations"),
+			{"client_id": self.patient.id},
+			format="json"
+		)
+		self.assertEqual(patient_approved_response.status_code, 200)
+		self.assertEqual(len(patient_approved_response.data), 1)
+		self.assertEqual(patient_approved_response.data[0]["id"], rec_id)
+		self.assertEqual(patient_approved_response.data[0]["status"], "APPROVED")
+
+	def test_admin_tasso_csv_import(self):
+		# Create a KitBarcodeAssignment linked to self.patient
+		KitBarcodeAssignment.objects.filter(barcode_number="TASSO_TEST_BARCODE").delete()
+		KitBarcodeAssignment.objects.create(
+			client=self.patient,
+			barcode_number="TASSO_TEST_BARCODE",
+			test_kit=self.kit,
+		)
+
+		# Prepare CSV file upload
+		from django.core.files.uploadedfile import SimpleUploadedFile
+		csv_content = (
+			b"barcode_number,biomarker_name,value,recorded_at\n"
+			b"TASSO_TEST_BARCODE,Vitamin D,35.5,2026-07-02T10:00:00Z\n"
+			b"TASSO_TEST_BARCODE,LDL Cholesterol,142.0,2026-07-02T10:00:00Z\n"
+		)
+		csv_file = SimpleUploadedFile("tasso.csv", csv_content, content_type="text/csv")
+
+		# Ensure staff has admin access
+		self.web_user.is_staff = True
+		self.web_user.is_superuser = True
+		self.web_user.save()
+		self.api_client.force_login(self.web_user)
+
+		# Post to admin import view
+		import_url = reverse("admin:core_kitbarcodeassignment_import_csv")
+		response = self.api_client.post(
+			import_url,
+			{"csv_file": csv_file},
+			format="multipart",
+			follow=True
+		)
+
+		# Should complete and redirect (200 on follow=True)
+		self.assertEqual(response.status_code, 200)
+
+		# Verify data import
+		self.assertTrue(BiomarkerTest.objects.filter(client=self.patient, recorded_at="2026-07-02T10:00:00Z").exists())
+		test_run = BiomarkerTest.objects.get(client=self.patient, recorded_at="2026-07-02T10:00:00Z")
+		
+		result1 = BiomarkerResult.objects.get(test=test_run, biomarker__name__iexact="Vitamin D")
+		result2 = BiomarkerResult.objects.get(test=test_run, biomarker__name__iexact="LDL Cholesterol")
+		self.assertEqual(result1.value, 35.5)
+		self.assertEqual(result2.value, 142.0)
+
+		# Verify AI recommendation draft was automatically triggered!
+		self.assertTrue(Recommendation.objects.filter(biomarker_test=test_run, status="DRAFT").exists())

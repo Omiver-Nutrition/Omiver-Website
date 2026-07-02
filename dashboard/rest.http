@@ -1,0 +1,8 @@
+GET http://localhost:8000/api/orders?client_id=2 HTTP/1.1
+content-type: application/json
+Authorization: Bearer <token>
+
+{
+    "name": "sample",
+    "time": "Wed, 21 Oct 2015 18:27:50 GMT"
+}

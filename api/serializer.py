@@ -12,12 +12,20 @@ class ClientSerializer(serializers.ModelSerializer):
     referred_by_code = serializers.CharField(write_only=True, required=False, allow_blank=True)
     dietary_recall = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
     exercise_recall = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
+    collection_finished_at = serializers.DateTimeField(write_only=True, required=False, allow_null=True)
 
     def _store_recall_logs(self, instance, dietary_recall=None, exercise_recall=None):
         if dietary_recall is not None and str(dietary_recall).strip():
             DietLog.objects.create(client=instance, recall=str(dietary_recall).strip())
         if exercise_recall is not None and str(exercise_recall).strip():
             ExerciseLog.objects.create(client=instance, recall=str(exercise_recall).strip())
+
+    def _store_collection_finished_at(self, instance, collection_finished_at=None):
+        if collection_finished_at:
+            latest_assignment = instance.kit_barcode_assignments.order_by("-created_at").first()
+            if latest_assignment:
+                latest_assignment.collected_at = collection_finished_at
+                latest_assignment.save(update_fields=["collected_at", "updated_at"])
 
     def _clear_legacy_recall_fields(self, instance):
         updated_fields = []
@@ -38,6 +46,10 @@ class ClientSerializer(serializers.ModelSerializer):
         data["exercise_recall"] = latest_exercise_log.recall if latest_exercise_log else ""
         data["dietary_recall_created_at"] = latest_diet_log.recorded_at if latest_diet_log else None
         data["exercise_recall_created_at"] = latest_exercise_log.recorded_at if latest_exercise_log else None
+        
+        # Map collection_finished_at from the latest KitBarcodeAssignment
+        latest_assignment = instance.kit_barcode_assignments.order_by("-created_at").first()
+        data["collection_finished_at"] = latest_assignment.collected_at.isoformat() if latest_assignment and latest_assignment.collected_at else None
         return data
 
     class Meta:
@@ -57,6 +69,7 @@ class ClientSerializer(serializers.ModelSerializer):
             "allergies",
             "dietary_recall",
             "exercise_recall",
+            "collection_finished_at",
             "dietary_typicality",
             "dietary_preference_mode",
             "preferred_cuisines",
@@ -81,9 +94,11 @@ class ClientSerializer(serializers.ModelSerializer):
         referred_by_code = validated_data.pop("referred_by_code", None)
         dietary_recall = validated_data.pop("dietary_recall", None)
         exercise_recall = validated_data.pop("exercise_recall", None)
+        collection_finished_at = validated_data.pop("collection_finished_at", None)
         instance = super().create(validated_data)
         self._clear_legacy_recall_fields(instance)
         self._store_recall_logs(instance, dietary_recall=dietary_recall, exercise_recall=exercise_recall)
+        self._store_collection_finished_at(instance, collection_finished_at=collection_finished_at)
         if referred_by_code:
             try:
                 provider = Client.objects.get(referral_code=referred_by_code.upper())
@@ -96,9 +111,11 @@ class ClientSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         dietary_recall = validated_data.pop("dietary_recall", None)
         exercise_recall = validated_data.pop("exercise_recall", None)
+        collection_finished_at = validated_data.pop("collection_finished_at", None)
         instance = super().update(instance, validated_data)
         self._clear_legacy_recall_fields(instance)
         self._store_recall_logs(instance, dietary_recall=dietary_recall, exercise_recall=exercise_recall)
+        self._store_collection_finished_at(instance, collection_finished_at=collection_finished_at)
         return instance
 
 class MealPlanSerializer(serializers.ModelSerializer):
@@ -359,7 +376,6 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             order=order,
             defaults={
                 "client": validated_data["client"],
-                "order_number": order.order_number,
                 "test_kit": validated_data["test_kit"],
                 "barcode_number": barcode_value,
             },
@@ -556,5 +572,27 @@ class ShippingAddressSerializer(serializers.ModelSerializer):
     class Meta:
         model = ShippingAddress
         fields = ["id", "client", "label", "street_address", "city", "state", "zip_code", "country", "is_default", "created_at"]
+
+
+class RecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Recommendation
+        fields = [
+            "id",
+            "client",
+            "biomarker_test",
+            "text",
+            "dietary_draft",
+            "exercise_draft",
+            "doctor_feedback",
+            "doctor_notes",
+            "dietary_final",
+            "exercise_final",
+            "status",
+            "approved_by",
+            "approved_at",
+            "created_at",
+            "updated_at",
+        ]
 
 

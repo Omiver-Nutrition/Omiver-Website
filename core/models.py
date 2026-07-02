@@ -524,15 +524,39 @@ class MealPlan(models.Model):
 class Recommendation(models.Model):
     """Personalized recommendations for a client."""
 
+    STATUS_CHOICES = [
+        ("DRAFT", "AI Draft Generated"),
+        ("PENDING_REVIEW", "Pending Doctor Review"),
+        ("REVISING", "AI Revising"),
+        ("APPROVED", "Approved"),
+    ]
+
     id = models.AutoField(primary_key=True)
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="recommendations")
-    text = models.CharField(max_length=500)
+    biomarker_test = models.ForeignKey("BiomarkerTest", on_delete=models.CASCADE, related_name="recommendations", null=True, blank=True)
+    
+    text = models.CharField(max_length=500, blank=True, help_text="Fallback or summary recommendation text")
+    
+    dietary_draft = models.JSONField(blank=True, null=True, help_text="AI generated initial diet plan")
+    exercise_draft = models.JSONField(blank=True, null=True, help_text="AI generated initial exercise plan")
+    
+    doctor_feedback = models.TextField(blank=True, help_text="Doctor feedback to AI for adjustments")
+    doctor_notes = models.TextField(blank=True, help_text="Additional public notes from doctor directly to patient")
+    
+    dietary_final = models.JSONField(blank=True, null=True, help_text="Refined final diet plan")
+    exercise_final = models.JSONField(blank=True, null=True, help_text="Refined final exercise plan")
+    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="DRAFT")
+    approved_by = models.ForeignKey(Client, on_delete=models.SET_NULL, null=True, blank=True, limit_choices_to={'type': 'PROVIDER'}, related_name="approved_recommendations")
+    approved_at = models.DateTimeField(null=True, blank=True)
+    
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"Recommendation for {self.client}: {self.text}"
+        return f"Recommendation ({self.status}) for {self.client}"
 
 

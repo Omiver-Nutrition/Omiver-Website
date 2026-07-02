@@ -58,6 +58,11 @@ urlpatterns = [
     # provider
     path("provider/referral-link", views.get_referral_link, name="get_referral_link"),
     path("provider/patients", views.get_provider_patients, name="get_provider_patients"),
+    # recommendations & AI draft workflow
+    path("recommendations", views.get_recommendations, name="get_recommendations"),
+    path("recommendations/<int:pk>/feedback", views.submit_doctor_feedback_api, name="submit_doctor_feedback_api"),
+    path("recommendations/<int:pk>/approve", views.approve_recommendation_api, name="approve_recommendation_api"),
+    path("recommendations/generate", views.generate_recommendation_draft_api, name="generate_recommendation_draft_api"),
     # pricing
     path("pricing/tiers", views.get_all_pricing_tiers, name="get_all_pricing_tiers"),
     path("pricing/tiers/<int:kit_id>", views.get_kit_pricing_tiers, name="get_kit_pricing_tiers"),
