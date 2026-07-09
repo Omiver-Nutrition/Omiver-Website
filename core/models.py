@@ -279,7 +279,13 @@ class Order(models.Model):
 
     id = models.AutoField(primary_key=True)
     client = models.ForeignKey("Client", on_delete=models.CASCADE, related_name="orders")
-    test_kit = models.ForeignKey(TestKit, on_delete=models.CASCADE, related_name="orders")
+    barcode_assignment = models.OneToOneField(
+        "KitBarcodeAssignment",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order",
+    )
     order_number = models.CharField(max_length=50, unique=True)
     order_date = models.DateTimeField(auto_now_add=True)
     quantity = models.PositiveIntegerField(default=1, help_text="Number of kits ordered")
@@ -293,7 +299,56 @@ class Order(models.Model):
         ordering = ["-order_date"]
 
     def __str__(self):
-        return f"Order {self.order_number} – {self.test_kit.name} for {self.client}"
+        kit_name = self.test_kit.name if self.test_kit else "No Kit"
+        return f"Order {self.order_number} – {kit_name} for {self.client}"
+
+    def save(self, *args, **kwargs):
+        # 1. Save unsaved barcode_assignment if present (created via test_kit setter)
+        if self.barcode_assignment and not self.barcode_assignment.pk:
+            if not self.barcode_assignment.client_id and self.client_id:
+                self.barcode_assignment.client = self.client
+            if self.barcode_assignment.barcode_number.startswith("KIT-TEMP-"):
+                self.barcode_assignment.barcode_number = f"KIT-{self.order_number}"
+            self.barcode_assignment.save()
+            self.barcode_assignment_id = self.barcode_assignment.pk
+
+        # Detect if barcode_assignment is changing
+        old_assignment_id = None
+        if self.pk:
+            old_order = Order.objects.filter(pk=self.pk).first()
+            if old_order and old_order.barcode_assignment_id != self.barcode_assignment_id:
+                old_assignment_id = old_order.barcode_assignment_id
+
+        super().save(*args, **kwargs)
+
+        if self.barcode_assignment:
+            # 1. Update the client of the new assignment to match the order's client
+            if self.barcode_assignment.client_id != self.client_id:
+                self.barcode_assignment.client = self.client
+                self.barcode_assignment.save(update_fields=["client"])
+
+        # 2. Delete the old placeholder assignment if it was replaced
+        if old_assignment_id:
+            old_assignment = KitBarcodeAssignment.objects.filter(pk=old_assignment_id).first()
+            if old_assignment and old_assignment.barcode_number.startswith("KIT-"):
+                old_assignment.delete()
+
+    @property
+    def test_kit(self):
+        return self.barcode_assignment.test_kit if self.barcode_assignment else None
+
+    @test_kit.setter
+    def test_kit(self, value):
+        if self.barcode_assignment:
+            self.barcode_assignment.test_kit = value
+        else:
+            import uuid
+            placeholder_barcode = "KIT-TEMP-" + uuid.uuid4().hex[:8].upper()
+            self.barcode_assignment = KitBarcodeAssignment(
+                test_kit=value,
+                barcode_number=placeholder_barcode,
+                client=getattr(self, "client", None)
+            )
 
     @property
     def tracking_number(self):
@@ -305,7 +360,7 @@ class Order(models.Model):
 
 
 class KitBarcodeAssignment(models.Model):
-    """Maps a unique kit barcode to the client/order/test kit that owns it."""
+    """Maps a unique kit barcode to the client/test kit that owns it."""
 
     id = models.AutoField(primary_key=True)
     client = models.ForeignKey(
@@ -315,7 +370,6 @@ class KitBarcodeAssignment(models.Model):
         blank=True,
         related_name="kit_barcode_assignments",
     )
-    order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name="barcode_assignment", null=True, blank=True)
     test_kit = models.ForeignKey(TestKit, on_delete=models.CASCADE, related_name="barcode_assignments")
     barcode_number = models.CharField(max_length=100, unique=True, db_index=True)
     collected_at = models.DateTimeField(null=True, blank=True)
@@ -326,12 +380,14 @@ class KitBarcodeAssignment(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        order_label = (self.order.order_number if self.order else "unassigned")
+        has_order = getattr(self, "order", None)
+        order_label = (self.order.order_number if has_order else "unassigned")
         return f"Barcode {self.barcode_number} – {order_label}"
 
     @property
     def order_number(self):
-        return self.order.order_number if self.order else None
+        has_order = getattr(self, "order", None)
+        return self.order.order_number if has_order else None
 
 
 class DeliveryEvent(models.Model):
@@ -379,6 +435,7 @@ class KitCollection(models.Model):
     order = models.OneToOneField("Order", on_delete=models.CASCADE, related_name="kit_collection", null=True, blank=True)
     kit_barcode = models.CharField(max_length=100, unique=True, db_index=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="CREATED")
+    collected_at = models.DateTimeField(null=True, blank=True)
     diet_log = models.OneToOneField("DietLog", on_delete=models.SET_NULL, null=True, blank=True, related_name="kit_collection")
     exercise_log = models.OneToOneField("ExerciseLog", on_delete=models.SET_NULL, null=True, blank=True, related_name="kit_collection")
     shipping_event = models.ForeignKey("ShippingInfo", on_delete=models.SET_NULL, null=True, blank=True, related_name="kit_collections")
@@ -507,6 +564,7 @@ class MealPlan(models.Model):
         if start_date is None or end_date is None:
             # Get start and end of current week (Monday to Sunday)
             start_of_week = now - timedelta(days=now.weekday())
+            start_of_week = start_of_week.replace(hour=0, minute=0, second=0, microsecond=0)
             end_of_week = start_of_week + timedelta(
                 days=6, hours=23, minutes=59, seconds=59
             )
@@ -558,5 +616,6 @@ class Recommendation(models.Model):
 
     def __str__(self):
         return f"Recommendation ({self.status}) for {self.client}"
+
 
 

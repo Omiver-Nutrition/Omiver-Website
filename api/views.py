@@ -1,6 +1,7 @@
 import stripe
 import os
 import csv
+from datetime import datetime
 from django.conf import settings
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -35,7 +36,7 @@ from .serializer import (
     BiomarkerSerializer, BiomarkerResultSerializer,
     BiomarkerTestSerializer, BiomarkerTestDetailSerializer,
     ClientPaymentHistorySerializer, ProviderPatientSerializer,
-    ShippingAddressSerializer, RecommendationSerializer,
+    ShippingAddressSerializer, RecommendationSerializer, KitCollectionSerializer,
 )
 from core.models import (
     MealPlan, Client, TestKit, Order, DeliveryEvent,
@@ -44,7 +45,7 @@ from core.models import (
     PaymentInfo, BillingAddress, Purchase, ShippingInfo,
     ShippingAddress,
     Biomarker, BiomarkerTest, BiomarkerResult,
-    Membership, Recommendation,
+    Membership, Recommendation, KitCollection, KitResult,
 )
 from collections import defaultdict
 from datetime import date
@@ -675,7 +676,7 @@ def list_orders(request):
         Q(client_id=client_id) |
         Q(barcode_assignment__client_id=client_id) |
         Q(kit_collection__user_id=client_id)
-    ).distinct().select_related("test_kit", "barcode_assignment")
+    ).distinct().select_related("barcode_assignment__test_kit")
     return Response(OrderSerializer(orders, many=True).data)
 
 
@@ -730,6 +731,7 @@ def _sync_collection_state(
     exercise_recall: str | None = None,
     shipping_tracking_number: str | None = None,
     result_info: str | None = None,
+    collected_at: datetime | None = None,
 ) -> KitCollection:
     collection = _ensure_collection_for_order(order, kit_barcode=kit_barcode)
     update_fields = []
@@ -748,6 +750,15 @@ def _sync_collection_state(
         exercise_log = ExerciseLog.objects.create(client=order.client, recall=str(exercise_recall).strip())
         collection.exercise_log = exercise_log
         update_fields.append("exercise_log")
+
+    if collected_at is not None:
+        collection.collected_at = collected_at
+        update_fields.append("collected_at")
+        # Sync collected_at to associated KitBarcodeAssignment as well
+        assignment = getattr(order, "barcode_assignment", None)
+        if assignment:
+            assignment.collected_at = collected_at
+            assignment.save(update_fields=["collected_at", "updated_at"])
 
     if shipping_tracking_number is not None:
         shipping_info, _ = ShippingInfo.objects.update_or_create(
@@ -791,7 +802,7 @@ def export_orders_csv(request):
     """Export order rows as CSV for spreadsheet import."""
     client_id = request.GET.get("client_id")
 
-    orders = Order.objects.select_related("client", "test_kit").order_by("-order_date")
+    orders = Order.objects.select_related("client", "barcode_assignment__test_kit").order_by("-order_date")
     if client_id:
         orders = orders.filter(client_id=client_id)
 
@@ -829,8 +840,8 @@ def export_orders_csv(request):
             order.client_id,
             _csv_safe(client_name),
             _csv_safe(order.client.email),
-            order.test_kit_id,
-            _csv_safe(order.test_kit.name),
+            order.test_kit.id if order.test_kit else "",
+            _csv_safe(order.test_kit.name if order.test_kit else ""),
             order.created_at.isoformat() if order.created_at else "",
             order.updated_at.isoformat() if order.updated_at else "",
         ])
@@ -855,13 +866,18 @@ def create_order(request):
     order.status = "CREATED"
     order.save(update_fields=["status"])
 
-    kit_barcode = "KIT-" + uuid.uuid4().hex[:8].upper()
-    KitBarcodeAssignment.objects.create(
-        client=order.client,
-        order=order,
-        test_kit=order.test_kit,
-        barcode_number=kit_barcode
-    )
+    # Reuse existing barcode assignment if already created by serializer, otherwise generate a new one
+    existing_assignment = getattr(order, "barcode_assignment", None)
+    if existing_assignment:
+        kit_barcode = existing_assignment.barcode_number
+    else:
+        kit_barcode = "KIT-" + uuid.uuid4().hex[:8].upper()
+        KitBarcodeAssignment.objects.create(
+            client=order.client,
+            order=order,
+            test_kit=order.test_kit,
+            barcode_number=kit_barcode
+        )
     _ensure_collection_for_order(order, kit_barcode=kit_barcode)
 
     # Seed initial delivery event
@@ -886,7 +902,7 @@ def create_order(request):
 def order_detail(request, pk):
     """Get a single order with nested delivery events."""
     try:
-        order = Order.objects.select_related("test_kit", "barcode_assignment").prefetch_related("delivery_events").get(pk=pk)
+        order = Order.objects.select_related("barcode_assignment__test_kit").prefetch_related("delivery_events").get(pk=pk)
     except Order.DoesNotExist:
         return Response({"error": "Order not found"}, status.HTTP_404_NOT_FOUND)
     return Response(OrderDetailSerializer(order).data)
@@ -966,7 +982,7 @@ def update_order_status(request, pk):
     order.refresh_from_db()
     return Response(
         OrderDetailSerializer(
-            Order.objects.select_related("test_kit", "barcode_assignment").prefetch_related("delivery_events").get(pk=pk)
+            Order.objects.select_related("barcode_assignment__test_kit").prefetch_related("delivery_events").get(pk=pk)
         ).data
     )
 
@@ -988,7 +1004,7 @@ def track_order(request):
         return Response({"error": "tracking_number is required"}, status.HTTP_400_BAD_REQUEST)
     order = (
         Order.objects
-        .select_related("test_kit", "barcode_assignment")
+        .select_related("barcode_assignment__test_kit")
         .prefetch_related("delivery_events")
         .filter(
             Q(forward_tracking_number=tracking_number)
@@ -1091,41 +1107,106 @@ def link_barcode_assignment(request):
     except Client.DoesNotExist:
         return Response({"message": "Client not found"}, status=status.HTTP_404_NOT_FOUND)
 
+    # 1. Look up the barcode assignment
     try:
         assignment = KitBarcodeAssignment.objects.select_related("client", "test_kit", "order").get(barcode_number=barcode_number)
     except KitBarcodeAssignment.DoesNotExist:
         return Response({"message": "Barcode not found"}, status=status.HTTP_404_NOT_FOUND)
 
+    # 2. Check if barcode is already linked to another client
     if assignment.client_id and assignment.client_id != client.id:
         return Response({"message": "Barcode is already linked to another client"}, status=status.HTTP_409_CONFLICT)
 
+    # 3. Find client's active pending order
+    active_order = Order.objects.filter(client=client).exclude(status__in=["FINISHED", "CANCELLED"]).first()
+    if not active_order:
+        return Response({"message": "No active order found for this client"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # 4. Check if the active order matches this barcode assignment
+    assigned_barcode = getattr(active_order, "barcode_assignment", None)
+    if not assigned_barcode:
+        return Response(
+            {"message": "No kit has been assigned to your order yet. Please check your order status or contact support."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if assigned_barcode.barcode_number != barcode_number:
+        return Response(
+            {"message": "This barcode does not match the kit assigned to your order. Please check the barcode or contact support."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    print("here")
     already_linked = assignment.client_id == client.id
     if not already_linked:
         assignment.client = client
         assignment.save(update_fields=["client", "updated_at"])
 
-    if not assignment.order:
-        assignment.order = Order.objects.create(
-            client=client,
-            test_kit=assignment.test_kit,
-            order_number=_generate_order_number(),
-            status="DELIVERED",
-        )
-        assignment.save(update_fields=["order", "updated_at"])
-
+    has_order = getattr(assignment, "order", None)
     return Response(
         {
             "linked": True,
             "already_linked": already_linked,
             "barcode_number": assignment.barcode_number,
             "client_id": assignment.client_id,
-            "order_id": assignment.order_id,
-            "order_number": assignment.order_number or (assignment.order.order_number if assignment.order else None),
+            "order_id": assignment.order.id if has_order else None,
+            "order_number": assignment.order.order_number if has_order else None,
             "test_kit_id": assignment.test_kit_id,
             "test_kit_name": assignment.test_kit.name,
         },
         status=status.HTTP_200_OK,
     )
+
+
+@extend_schema(
+    summary="Unlink barcode assignment",
+    description="Clears the client and order relations from a barcode assignment, and restores a fresh placeholder KIT- barcode if an active order was associated with it.",
+    request=inline_serializer(
+        name="BarcodeUnlinkRequest",
+        fields={
+            "barcode_number": serializers.CharField(),
+            "client_id": serializers.IntegerField(),
+        },
+    ),
+    responses={200: inline_serializer(name="BarcodeUnlinkResponse", fields={"unlinked": serializers.BooleanField()})},
+    tags=["Barcode Assignments"],
+)
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def unlink_barcode_assignment(request):
+    barcode_number = (request.data.get("barcode_number") or "").strip()
+    client_id = request.data.get("client_id")
+
+    if not barcode_number or not client_id:
+        return Response({"message": "barcode_number and client_id are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Fetch assignment
+    assignment = KitBarcodeAssignment.objects.filter(barcode_number=barcode_number, client_id=client_id).first()
+    if not assignment:
+        return Response({"message": "Barcode assignment not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    order = getattr(assignment, "order", None)
+
+    # Clear relations
+    assignment.client = None
+    assignment.save(update_fields=["client", "updated_at"])
+
+    # If there was an associated active order, restore a fresh placeholder KIT- barcode
+    if order:
+        order.barcode_assignment = None
+        order.save(update_fields=["barcode_assignment"])
+
+        import uuid
+        placeholder = "KIT-" + uuid.uuid4().hex[:8].upper()
+        placeholder_assignment = KitBarcodeAssignment.objects.create(
+            client=order.client,
+            test_kit=order.test_kit,
+            barcode_number=placeholder
+        )
+        order.barcode_assignment = placeholder_assignment
+        order.save(update_fields=["barcode_assignment"])
+
+    return Response({"unlinked": True}, status=status.HTTP_200_OK)
 
 
 @extend_schema(
@@ -1185,6 +1266,7 @@ def mark_barcode_collected(request):
     assignment.collected_at = collected_at
     assignment.save(update_fields=["collected_at", "updated_at"])
 
+    has_order = getattr(assignment, "order", None)
     return Response(
         {
             "collected": True,
@@ -1192,7 +1274,7 @@ def mark_barcode_collected(request):
             "collected_at": assignment.collected_at,
             "assignment_id": assignment.id,
             "client_id": assignment.client_id,
-            "order_id": assignment.order_id,
+            "order_id": assignment.order.id if has_order else None,
             "test_kit_id": assignment.test_kit_id,
             "test_kit_name": assignment.test_kit.name,
         },
@@ -1237,18 +1319,19 @@ def create_barcode_assignment(request):
         return Response({"message": "barcode_number is required"}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        order = Order.objects.select_related("client", "test_kit").get(order_number=kit_code)
+        order = Order.objects.select_related("client", "barcode_assignment__test_kit").get(order_number=kit_code)
     except Order.DoesNotExist:
         return Response({"message": "Order not found for kit_code"}, status=status.HTTP_404_NOT_FOUND)
 
     assignment, created = KitBarcodeAssignment.objects.update_or_create(
-        order=order,
+        barcode_number=barcode_number,
         defaults={
             "client": order.client,
             "test_kit": order.test_kit,
-            "barcode_number": barcode_number,
         },
     )
+    order.barcode_assignment = assignment
+    order.save(update_fields=["barcode_assignment"])
 
     return Response(
         {
@@ -1258,8 +1341,8 @@ def create_barcode_assignment(request):
             "client_id": order.client_id,
             "order_id": order.id,
             "order_number": assignment.order_number or order.order_number,
-            "test_kit_id": order.test_kit_id,
-            "test_kit_name": order.test_kit.name,
+            "test_kit_id": order.test_kit.id if order.test_kit else None,
+            "test_kit_name": order.test_kit.name if order.test_kit else "",
         },
         status=status.HTTP_200_OK,
     )
@@ -1486,16 +1569,22 @@ def confirm_payment(request):
         except Exception:
             # Do not block checkout if address persistence fails
             pass
-
-        order = Order.objects.create(
+        kit_barcode = "KIT-" + uuid.uuid4().hex[:8].upper()
+        barcode_assignment = KitBarcodeAssignment.objects.create(
             client=client,
             test_kit=kit,
+            barcode_number=kit_barcode
+        )
+        order = Order.objects.create(
+            client=client,
+            barcode_assignment=barcode_assignment,
             order_number=_generate_order_number(),
             quantity=quantity,
             forward_tracking_number="",
             return_tracking_number="",
             status="PENDING",
         )
+        _ensure_collection_for_order(order, kit_barcode=kit_barcode)
 
         DeliveryEvent.objects.create(
             order=order,
@@ -1504,8 +1593,6 @@ def confirm_payment(request):
             description="Your order has been received",
             is_completed=True,
         )
-
-        print("-----debug-----")
 
         purchase = Purchase.objects.create(
             client=client,
@@ -1584,14 +1671,21 @@ def stripe_webhook(request):
                          zip_code="00000",
                      )
 
-                     order = Order.objects.create(
+                     kit_barcode = "KIT-" + uuid.uuid4().hex[:8].upper()
+                     barcode_assignment = KitBarcodeAssignment.objects.create(
                          client=client,
                          test_kit=kit,
+                         barcode_number=kit_barcode
+                     )
+                     order = Order.objects.create(
+                         client=client,
+                         barcode_assignment=barcode_assignment,
                          order_number=_generate_order_number(),
                          forward_tracking_number="",
                          return_tracking_number="",
                          status="PENDING",
                      )
+                     _ensure_collection_for_order(order, kit_barcode=kit_barcode)
 
                      DeliveryEvent.objects.create(
                          order=order,
@@ -1683,24 +1777,23 @@ def checkout(request):
         zip_code=data["zip_code"],
     )
 
+    kit_barcode = "KIT-" + uuid.uuid4().hex[:8].upper()
+    barcode_assignment = KitBarcodeAssignment.objects.create(
+        client=client,
+        test_kit=kit,
+        barcode_number=kit_barcode
+    )
+
     # ── Create Order ────────────────────────────────────────────────
     order = Order.objects.create(
         client=client,
-        test_kit=kit,
+        barcode_assignment=barcode_assignment,
         order_number=_generate_order_number(),
         forward_tracking_number="",
         return_tracking_number="",
         status="CREATED", # Changed from PENDING to CREATED based on user prompt
     )
 
-    # Assign barcode and KitCollection
-    kit_barcode = "KIT-" + uuid.uuid4().hex[:8].upper()
-    KitBarcodeAssignment.objects.create(
-        client=client,
-        order=order,
-        test_kit=kit,
-        barcode_number=kit_barcode
-    )
     _ensure_collection_for_order(order, kit_barcode=kit_barcode)
 
     # Seed first delivery event
@@ -1913,7 +2006,7 @@ def client_dashboard(request):
         Q(client=client) |
         Q(barcode_assignment__client=client) |
         Q(kit_collection__user=client)
-    ).distinct().select_related("test_kit")[:5]
+    ).distinct().select_related("barcode_assignment__test_kit")[:5]
 
     # ── Recommendations ─────────────────────────────────────────────
     recommendations = list(Recommendation.objects.filter(client=client).values_list('text', flat=True))
@@ -2036,6 +2129,14 @@ def client_memberships(request):
     ]
     return Response(data)
 
+def _generate_tracking_number():
+    import random
+    import string
+    return "TRK" + "".join(random.choices(string.digits, k=10))
+
+
+
+
 @api_view(["GET"])
 @permission_classes([AllowAny]) # usually IsAuthenticated
 def get_kit_collection(request, order_id):
@@ -2067,13 +2168,25 @@ def collection_log(request):
     order_id = request.data.get("order_id")
     dietary_recall = request.data.get("dietary_recall")
     exercise_recall = request.data.get("exercise_recall")
+    collected_at_str = request.data.get("collected_at")
 
     try:
         order = Order.objects.get(pk=order_id)
     except Order.DoesNotExist:
         return Response({"error": "Order not found"}, status=status.HTTP_404_NOT_FOUND)
 
-    collection = _sync_collection_state(order, status="PENDING", dietary_recall=dietary_recall, exercise_recall=exercise_recall)
+    collected_at = None
+    if collected_at_str:
+        from django.utils.dateparse import parse_datetime
+        collected_at = parse_datetime(collected_at_str)
+
+    collection = _sync_collection_state(
+        order,
+        status="PENDING",
+        dietary_recall=dietary_recall,
+        exercise_recall=exercise_recall,
+        collected_at=collected_at
+    )
     return Response(KitCollectionSerializer(collection).data)
 
 @api_view(["POST"])

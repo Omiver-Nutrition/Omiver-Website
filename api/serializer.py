@@ -13,6 +13,15 @@ class ClientSerializer(serializers.ModelSerializer):
     dietary_recall = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
     exercise_recall = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
     collection_finished_at = serializers.DateTimeField(write_only=True, required=False, allow_null=True)
+    cardholder_name = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
+    card_brand = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
+    card_last_four = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
+    expiry_month = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+    expiry_year = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+    billing_street = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
+    billing_city = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
+    billing_state = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
+    billing_zip = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
 
     def _store_recall_logs(self, instance, dietary_recall=None, exercise_recall=None):
         if dietary_recall is not None and str(dietary_recall).strip():
@@ -26,6 +35,18 @@ class ClientSerializer(serializers.ModelSerializer):
             if latest_assignment:
                 latest_assignment.collected_at = collection_finished_at
                 latest_assignment.save(update_fields=["collected_at", "updated_at"])
+                order = getattr(latest_assignment, "order", None)
+                if order:
+                    collection, _ = KitCollection.objects.get_or_create(
+                        order=order,
+                        defaults={
+                            "user": instance,
+                            "kit_barcode": latest_assignment.barcode_number,
+                            "status": "COLLECTED",
+                        }
+                    )
+                    collection.collected_at = collection_finished_at
+                    collection.save(update_fields=["collected_at", "updated_at"])
 
     def _clear_legacy_recall_fields(self, instance):
         updated_fields = []
@@ -47,10 +68,84 @@ class ClientSerializer(serializers.ModelSerializer):
         data["dietary_recall_created_at"] = latest_diet_log.recorded_at if latest_diet_log else None
         data["exercise_recall_created_at"] = latest_exercise_log.recorded_at if latest_exercise_log else None
         
-        # Map collection_finished_at from the latest KitBarcodeAssignment
+        # Map collection_finished_at from the active order's KitCollection, or fallback to latest assignment
         latest_assignment = instance.kit_barcode_assignments.order_by("-created_at").first()
-        data["collection_finished_at"] = latest_assignment.collected_at.isoformat() if latest_assignment and latest_assignment.collected_at else None
+        collected_at = None
+        if latest_assignment and not latest_assignment.barcode_number.startswith("KIT-"):
+            order = getattr(latest_assignment, "order", None)
+            if order:
+                collection = KitCollection.objects.filter(order=order).first()
+                if collection and collection.collected_at:
+                    collected_at = collection.collected_at
+            if not collected_at and latest_assignment.collected_at:
+                collected_at = latest_assignment.collected_at
+        data["collection_finished_at"] = collected_at.isoformat() if collected_at else None
+
+        # Map payment and billing details from the latest completed/pending PaymentInfo
+        latest_payment = instance.payments.order_by("-created_at").first()
+        if latest_payment:
+            data["cardholder_name"] = latest_payment.cardholder_name
+            data["card_brand"] = latest_payment.card_brand
+            data["card_last_four"] = latest_payment.card_last_four
+            data["expiry_month"] = latest_payment.expiry_month
+            data["expiry_year"] = latest_payment.expiry_year
+            
+            billing_address = getattr(latest_payment, "billing_address", None)
+            if billing_address:
+                data["billing_street"] = billing_address.street_address
+                data["billing_city"] = billing_address.city
+                data["billing_state"] = billing_address.state
+                data["billing_zip"] = billing_address.zip_code
+        else:
+            data["cardholder_name"] = ""
+            data["card_brand"] = ""
+            data["card_last_four"] = ""
+            data["expiry_month"] = None
+            data["expiry_year"] = None
+            data["billing_street"] = ""
+            data["billing_city"] = ""
+            data["billing_state"] = ""
+            data["billing_zip"] = ""
         return data
+
+    def update(self, instance, validated_data):
+        cardholder_name = validated_data.pop("cardholder_name", None)
+        card_brand = validated_data.pop("card_brand", None)
+        card_last_four = validated_data.pop("card_last_four", None)
+        expiry_month = validated_data.pop("expiry_month", None)
+        expiry_year = validated_data.pop("expiry_year", None)
+        billing_street = validated_data.pop("billing_street", None)
+        billing_city = validated_data.pop("billing_city", None)
+        billing_state = validated_data.pop("billing_state", None)
+        billing_zip = validated_data.pop("billing_zip", None)
+
+        client = super().update(instance, validated_data)
+
+        # Update/Create payment info if provided
+        if cardholder_name or card_brand or card_last_four:
+            payment_info, _ = PaymentInfo.objects.update_or_create(
+                client=client,
+                defaults={
+                    "cardholder_name": cardholder_name or getattr(client.payments.first(), "cardholder_name", ""),
+                    "card_last_four": card_last_four or getattr(client.payments.first(), "card_last_four", ""),
+                    "card_brand": card_brand or getattr(client.payments.first(), "card_brand", ""),
+                    "expiry_month": expiry_month or getattr(client.payments.first(), "expiry_month", 12),
+                    "expiry_year": expiry_year or getattr(client.payments.first(), "expiry_year", 2030),
+                    "amount": 0.00,
+                    "payment_status": "COMPLETED",
+                }
+            )
+            if billing_street or billing_city or billing_state or billing_zip:
+                BillingAddress.objects.update_or_create(
+                    payment=payment_info,
+                    defaults={
+                        "street_address": billing_street or "",
+                        "city": billing_city or "",
+                        "state": billing_state or "",
+                        "zip_code": billing_zip or "",
+                    }
+                )
+        return client
 
     class Meta:
         model = Client
@@ -87,6 +182,16 @@ class ClientSerializer(serializers.ModelSerializer):
             "referral_code",
             "referred_by",
             "referred_by_code",
+            # Payment fields
+            "cardholder_name",
+            "card_brand",
+            "card_last_four",
+            "expiry_month",
+            "expiry_year",
+            "billing_street",
+            "billing_city",
+            "billing_state",
+            "billing_zip",
         ]
         read_only_fields = ["referral_code", "referred_by"]
 
@@ -143,7 +248,7 @@ class KitCollectionSerializer(serializers.ModelSerializer):
     class Meta:
         model = KitCollection
         fields = [
-            "id", "user", "order", "kit_barcode", "status",
+            "id", "user", "order", "kit_barcode", "status", "collected_at",
             "diet_log", "exercise_log", "shipping_event",
             "dietary_recall", "exercise_recall",
             "created_at", "updated_at",
@@ -158,6 +263,7 @@ class KitResultSerializer(serializers.ModelSerializer):
 
 class OrderSerializer(serializers.ModelSerializer):
     """Used for list views — lightweight."""
+    test_kit = serializers.PrimaryKeyRelatedField(read_only=True)
     test_kit_name = serializers.CharField(source="test_kit.name", read_only=True)
     biomarker_count = serializers.IntegerField(source="test_kit.biomarker_count", read_only=True)
     barcode_number = serializers.SerializerMethodField()
@@ -171,7 +277,10 @@ class OrderSerializer(serializers.ModelSerializer):
 
     def get_barcode_number(self, obj):
         assignment = getattr(obj, "barcode_assignment", None)
-        return assignment.barcode_number if assignment else None
+        barcode = assignment.barcode_number if assignment else None
+        if barcode and (barcode.startswith("KIT-") or barcode == obj.order_number):
+            return None
+        return barcode
 
     def _collection(self, obj):
         return getattr(obj, "kit_collection", None)
@@ -179,9 +288,14 @@ class OrderSerializer(serializers.ModelSerializer):
     def get_kit_barcode(self, obj):
         collection = self._collection(obj)
         if collection and collection.kit_barcode:
-            return collection.kit_barcode
+            barcode = collection.kit_barcode
+            if not (barcode.startswith("KIT-") or barcode == obj.order_number):
+                return barcode
         assignment = getattr(obj, "barcode_assignment", None)
-        return assignment.barcode_number if assignment else None
+        barcode = assignment.barcode_number if assignment else None
+        if barcode and (barcode.startswith("KIT-") or barcode == obj.order_number):
+            return None
+        return barcode
 
     def get_collection_status(self, obj):
         collection = self._collection(obj)
@@ -231,7 +345,10 @@ class OrderDetailSerializer(serializers.ModelSerializer):
 
     def get_barcode_number(self, obj):
         assignment = getattr(obj, "barcode_assignment", None)
-        return assignment.barcode_number if assignment else None
+        barcode = assignment.barcode_number if assignment else None
+        if barcode and (barcode.startswith("KIT-") or barcode == obj.order_number):
+            return None
+        return barcode
 
     def _collection(self, obj):
         return getattr(obj, "kit_collection", None)
@@ -239,9 +356,14 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     def get_kit_barcode(self, obj):
         collection = self._collection(obj)
         if collection and collection.kit_barcode:
-            return collection.kit_barcode
+            barcode = collection.kit_barcode
+            if not (barcode.startswith("KIT-") or barcode == obj.order_number):
+                return barcode
         assignment = getattr(obj, "barcode_assignment", None)
-        return assignment.barcode_number if assignment else None
+        barcode = assignment.barcode_number if assignment else None
+        if barcode and (barcode.startswith("KIT-") or barcode == obj.order_number):
+            return None
+        return barcode
 
     def get_collection_status(self, obj):
         collection = self._collection(obj)
@@ -371,15 +493,14 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             return_tracking_number=return_tracking_number,
         )
 
-        barcode_value = barcode_number or order.order_number
-        KitBarcodeAssignment.objects.update_or_create(
-            order=order,
-            defaults={
-                "client": validated_data["client"],
-                "test_kit": validated_data["test_kit"],
-                "barcode_number": barcode_value,
-            },
-        )
+        if barcode_number:
+            assignment = KitBarcodeAssignment.objects.filter(barcode_number=barcode_number).first()
+            if assignment:
+                assignment.client = validated_data["client"]
+                assignment.save(update_fields=["client", "updated_at"])
+                order.barcode_assignment = assignment
+                order.save(update_fields=["barcode_assignment"])
+
         return order
 
 
@@ -594,5 +715,8 @@ class RecommendationSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+
+
 
 

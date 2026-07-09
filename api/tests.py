@@ -520,6 +520,12 @@ class ApiSmokeTests(TestCase):
 	def test_create_order_resolves_test_kit_from_barcode(self):
 		barcode = "21191290"
 
+		# Pre-create the physical kit barcode asset in the database to match company assets rule
+		KitBarcodeAssignment.objects.create(
+			barcode_number=barcode,
+			test_kit=self.kit,
+		)
+
 		payload = {
 			"client_id": self.other_client.id,
 			"kit_codes": [barcode],
@@ -531,8 +537,8 @@ class ApiSmokeTests(TestCase):
 		response = self.api_client.post(reverse("create_order"), payload, format="json")
 
 		self.assertEqual(response.status_code, 201)
-		created_order = Order.objects.select_related("test_kit", "barcode_assignment").get(order_number="ORD-3002")
-		self.assertEqual(created_order.test_kit_id, self.kit.id)
+		created_order = Order.objects.select_related("barcode_assignment__test_kit").get(order_number="ORD-3002")
+		self.assertEqual(created_order.test_kit.id, self.kit.id)
 		self.assertEqual(created_order.barcode_assignment.client_id, self.other_client.id)
 		self.assertEqual(created_order.barcode_assignment.barcode_number, barcode)
 		self.assertEqual(created_order.delivery_events.count(), 1)
@@ -540,10 +546,11 @@ class ApiSmokeTests(TestCase):
 	def test_mark_barcode_collected_updates_timestamp(self):
 		assignment = KitBarcodeAssignment.objects.create(
 			client=self.patient,
-			order=self.order,
 			test_kit=self.kit,
 			barcode_number="21191290",
 		)
+		self.order.barcode_assignment = assignment
+		self.order.save()
 
 		collected_at = timezone.now().replace(microsecond=0)
 		response = self.api_client.post(

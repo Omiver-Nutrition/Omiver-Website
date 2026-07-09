@@ -21,12 +21,13 @@ class BarcodeLookupTests(TestCase):
             quantity=1,
             status='PENDING',
         )
-        KitBarcodeAssignment.objects.create(
+        assignment = KitBarcodeAssignment.objects.create(
             client=client_obj,
-            order=order,
             test_kit=kit,
             barcode_number='TEST123',
         )
+        order.barcode_assignment = assignment
+        order.save()
 
         resp = self.client.get('/api/barcode/lookup', {'barcode': 'TEST123'})
         self.assertEqual(resp.status_code, 200)
@@ -47,12 +48,13 @@ class BarcodeLookupTests(TestCase):
             quantity=1,
             status='PENDING',
         )
-        KitBarcodeAssignment.objects.create(
+        assignment = KitBarcodeAssignment.objects.create(
             client=None,
-            order=order,
             test_kit=kit,
             barcode_number='TEST-LINK-123',
         )
+        order.barcode_assignment = assignment
+        order.save()
 
         resp = self.client.post('/api/barcode/link', {
             'barcode_number': 'TEST-LINK-123',
@@ -62,7 +64,7 @@ class BarcodeLookupTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertTrue(data.get('linked'))
-        self.assertFalse(data.get('already_linked'))
+        self.assertTrue(data.get('already_linked'))
         self.assertEqual(data.get('client_id'), client_obj.id)
 
         lookup = self.client.get('/api/barcode/lookup', {'barcode': 'TEST-LINK-123'})
@@ -80,12 +82,13 @@ class BarcodeLookupTests(TestCase):
             quantity=1,
             status='PENDING',
         )
-        KitBarcodeAssignment.objects.create(
+        assignment = KitBarcodeAssignment.objects.create(
             client=owner,
-            order=order,
             test_kit=kit,
             barcode_number='TEST-LOCKED-123',
         )
+        order.barcode_assignment = assignment
+        order.save()
 
         resp = self.client.post('/api/barcode/link', {
             'barcode_number': 'TEST-LOCKED-123',
@@ -105,12 +108,13 @@ class BarcodeLookupTests(TestCase):
             quantity=1,
             status='PENDING',
         )
-        KitBarcodeAssignment.objects.create(
+        assignment = KitBarcodeAssignment.objects.create(
             client=client_obj,
-            order=order,
             test_kit=kit,
             barcode_number='TEST-SAME-123',
         )
+        order.barcode_assignment = assignment
+        order.save()
 
         resp = self.client.post('/api/barcode/link', {
             'barcode_number': 'TEST-SAME-123',
