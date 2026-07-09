@@ -2,11 +2,17 @@ www.omiver.me {
     root * /srv/static
     file_server /static/*
 
-    # Proxy all other requests to Gunicorn
-    handle {
-        reverse_proxy http://web:8000
-    }
     handle /app* {
         reverse_proxy frontend:3000
+    }
+
+    # Send API traffic to Django and keep the frontend mounted under /app.
+    handle /api/* {
+        reverse_proxy http://web:8000
+    }
+
+    # Proxy all other requests to Gunicorn.
+    handle {
+        reverse_proxy http://web:8000
     }
 }

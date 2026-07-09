@@ -279,13 +279,7 @@ class Order(models.Model):
 
     id = models.AutoField(primary_key=True)
     client = models.ForeignKey("Client", on_delete=models.CASCADE, related_name="orders")
-    barcode_assignment = models.OneToOneField(
-        "KitBarcodeAssignment",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="order",
-    )
+
     order_number = models.CharField(max_length=50, unique=True)
     order_date = models.DateTimeField(auto_now_add=True)
     quantity = models.PositiveIntegerField(default=1, help_text="Number of kits ordered")
@@ -303,52 +297,67 @@ class Order(models.Model):
         return f"Order {self.order_number} – {kit_name} for {self.client}"
 
     def save(self, *args, **kwargs):
-        # 1. Save unsaved barcode_assignment if present (created via test_kit setter)
-        if self.barcode_assignment and not self.barcode_assignment.pk:
-            if not self.barcode_assignment.client_id and self.client_id:
-                self.barcode_assignment.client = self.client
-            if self.barcode_assignment.barcode_number.startswith("KIT-TEMP-"):
-                self.barcode_assignment.barcode_number = f"KIT-{self.order_number}"
-            self.barcode_assignment.save()
-            self.barcode_assignment_id = self.barcode_assignment.pk
-
-        # Detect if barcode_assignment is changing
-        old_assignment_id = None
-        if self.pk:
-            old_order = Order.objects.filter(pk=self.pk).first()
-            if old_order and old_order.barcode_assignment_id != self.barcode_assignment_id:
-                old_assignment_id = old_order.barcode_assignment_id
-
         super().save(*args, **kwargs)
 
-        if self.barcode_assignment:
-            # 1. Update the client of the new assignment to match the order's client
-            if self.barcode_assignment.client_id != self.client_id:
-                self.barcode_assignment.client = self.client
-                self.barcode_assignment.save(update_fields=["client"])
+        pending = getattr(self, "_pending_barcode_assignment", None)
+        if pending:
+            pending.order = self
+            pending.client = self.client
+            if pending.barcode_number.startswith("KIT-TEMP-"):
+                pending.barcode_number = f"KIT-{self.order_number}"
+            pending.save()
+            self._pending_barcode_assignment = None
 
-        # 2. Delete the old placeholder assignment if it was replaced
-        if old_assignment_id:
-            old_assignment = KitBarcodeAssignment.objects.filter(pk=old_assignment_id).first()
-            if old_assignment and old_assignment.barcode_number.startswith("KIT-"):
-                old_assignment.delete()
+        # Update client of all assignments to match the order's client
+        for assignment in self.barcode_assignments.all():
+            if assignment.client_id != self.client_id:
+                assignment.client = self.client
+                assignment.save(update_fields=["client"])
+
+    @property
+    def barcode_assignment(self):
+        return self.barcode_assignments.first()
+
+    @barcode_assignment.setter
+    def barcode_assignment(self, value):
+        if value:
+            if self.pk:
+                value.order = self
+                value.client = self.client
+                value.save(update_fields=["order", "client"])
+            else:
+                self._pending_barcode_assignment = value
+        else:
+            if self.pk:
+                self.barcode_assignments.all().update(order=None)
+            else:
+                self._pending_barcode_assignment = None
 
     @property
     def test_kit(self):
-        return self.barcode_assignment.test_kit if self.barcode_assignment else None
+        first_assignment = self.barcode_assignments.first() if self.pk else getattr(self, "_pending_barcode_assignment", None)
+        return first_assignment.test_kit if first_assignment else None
 
     @test_kit.setter
     def test_kit(self, value):
-        if self.barcode_assignment:
-            self.barcode_assignment.test_kit = value
+        first_assignment = self.barcode_assignments.first() if self.pk else getattr(self, "_pending_barcode_assignment", None)
+        if first_assignment:
+            first_assignment.test_kit = value
+            if first_assignment.pk:
+                first_assignment.save(update_fields=["test_kit"])
         else:
             import uuid
             placeholder_barcode = "KIT-TEMP-" + uuid.uuid4().hex[:8].upper()
-            self.barcode_assignment = KitBarcodeAssignment(
+            assignment = KitBarcodeAssignment(
                 test_kit=value,
                 barcode_number=placeholder_barcode,
                 client=getattr(self, "client", None)
             )
+            if self.pk:
+                assignment.order = self
+                assignment.save()
+            else:
+                self._pending_barcode_assignment = assignment
 
     @property
     def tracking_number(self):
@@ -370,6 +379,13 @@ class KitBarcodeAssignment(models.Model):
         blank=True,
         related_name="kit_barcode_assignments",
     )
+    order = models.ForeignKey(
+        "Order",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="barcode_assignments",
+    )
     test_kit = models.ForeignKey(TestKit, on_delete=models.CASCADE, related_name="barcode_assignments")
     barcode_number = models.CharField(max_length=100, unique=True, db_index=True)
     collected_at = models.DateTimeField(null=True, blank=True)
@@ -378,6 +394,14 @@ class KitBarcodeAssignment(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.order_id and not self.barcode_number.startswith("KIT-"):
+            KitBarcodeAssignment.objects.filter(
+                order=self.order,
+                barcode_number__startswith="KIT-"
+            ).delete()
 
     def __str__(self):
         has_order = getattr(self, "order", None)

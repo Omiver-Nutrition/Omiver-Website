@@ -80,4 +80,3 @@ urlpatterns = [
     path("vendor/receive", views.vendor_receive_kit, name="vendor_receive_kit"),
     path("vendor/finish", views.vendor_finish_kit, name="vendor_finish_kit"),
 ]
-

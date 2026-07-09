@@ -537,7 +537,7 @@ class ApiSmokeTests(TestCase):
 		response = self.api_client.post(reverse("create_order"), payload, format="json")
 
 		self.assertEqual(response.status_code, 201)
-		created_order = Order.objects.select_related("barcode_assignment__test_kit").get(order_number="ORD-3002")
+		created_order = Order.objects.prefetch_related("barcode_assignments__test_kit").get(order_number="ORD-3002")
 		self.assertEqual(created_order.test_kit.id, self.kit.id)
 		self.assertEqual(created_order.barcode_assignment.client_id, self.other_client.id)
 		self.assertEqual(created_order.barcode_assignment.barcode_number, barcode)

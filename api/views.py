@@ -674,9 +674,9 @@ def list_orders(request):
         return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
     orders = Order.objects.filter(
         Q(client_id=client_id) |
-        Q(barcode_assignment__client_id=client_id) |
+        Q(barcode_assignments__client_id=client_id) |
         Q(kit_collection__user_id=client_id)
-    ).distinct().select_related("barcode_assignment__test_kit")
+    ).distinct().prefetch_related("barcode_assignments__test_kit")
     return Response(OrderSerializer(orders, many=True).data)
 
 
@@ -802,7 +802,7 @@ def export_orders_csv(request):
     """Export order rows as CSV for spreadsheet import."""
     client_id = request.GET.get("client_id")
 
-    orders = Order.objects.select_related("client", "barcode_assignment__test_kit").order_by("-order_date")
+    orders = Order.objects.select_related("client").prefetch_related("barcode_assignments__test_kit").order_by("-order_date")
     if client_id:
         orders = orders.filter(client_id=client_id)
 
@@ -902,7 +902,7 @@ def create_order(request):
 def order_detail(request, pk):
     """Get a single order with nested delivery events."""
     try:
-        order = Order.objects.select_related("barcode_assignment__test_kit").prefetch_related("delivery_events").get(pk=pk)
+        order = Order.objects.prefetch_related("barcode_assignments__test_kit", "delivery_events").get(pk=pk)
     except Order.DoesNotExist:
         return Response({"error": "Order not found"}, status.HTTP_404_NOT_FOUND)
     return Response(OrderDetailSerializer(order).data)
@@ -982,7 +982,7 @@ def update_order_status(request, pk):
     order.refresh_from_db()
     return Response(
         OrderDetailSerializer(
-            Order.objects.select_related("barcode_assignment__test_kit").prefetch_related("delivery_events").get(pk=pk)
+            Order.objects.prefetch_related("barcode_assignments__test_kit", "delivery_events").get(pk=pk)
         ).data
     )
 
@@ -1004,8 +1004,7 @@ def track_order(request):
         return Response({"error": "tracking_number is required"}, status.HTTP_400_BAD_REQUEST)
     order = (
         Order.objects
-        .select_related("barcode_assignment__test_kit")
-        .prefetch_related("delivery_events")
+        .prefetch_related("barcode_assignments__test_kit", "delivery_events")
         .filter(
             Q(forward_tracking_number=tracking_number)
             | Q(return_tracking_number=tracking_number)
@@ -1112,7 +1111,7 @@ def link_barcode_assignment(request):
         assignment = KitBarcodeAssignment.objects.select_related("client", "test_kit", "order").get(barcode_number=barcode_number)
     except KitBarcodeAssignment.DoesNotExist:
         return Response({"message": "Barcode not found"}, status=status.HTTP_404_NOT_FOUND)
-
+    
     # 2. Check if barcode is already linked to another client
     if assignment.client_id and assignment.client_id != client.id:
         return Response({"message": "Barcode is already linked to another client"}, status=status.HTTP_409_CONFLICT)
@@ -1120,26 +1119,36 @@ def link_barcode_assignment(request):
     # 3. Find client's active pending order
     active_order = Order.objects.filter(client=client).exclude(status__in=["FINISHED", "CANCELLED"]).first()
     if not active_order:
-        return Response({"message": "No active order found for this client"}, status=status.HTTP_400_BAD_REQUEST)
-
-    # 4. Check if the active order matches this barcode assignment
-    assigned_barcode = getattr(active_order, "barcode_assignment", None)
-    if not assigned_barcode:
-        return Response(
-            {"message": "No kit has been assigned to your order yet. Please check your order status or contact support."},
-            status=status.HTTP_400_BAD_REQUEST
+        import uuid
+        active_order = Order.objects.create(
+            client=client,
+            order_number=f"ORD-{uuid.uuid4().hex[:8].upper()}",
+            status="PENDING"
         )
-
-    if assigned_barcode.barcode_number != barcode_number:
-        return Response(
-            {"message": "This barcode does not match the kit assigned to your order. Please check the barcode or contact support."},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-    print("here")
-    already_linked = assignment.client_id == client.id
-    if not already_linked:
+        assignment.order = active_order
         assignment.client = client
-        assignment.save(update_fields=["client", "updated_at"])
+        assignment.save(update_fields=["order", "client", "updated_at"])
+        already_linked = False
+    else:
+        # 4. Check if the active order matches this barcode assignment
+        assigned_barcode = getattr(active_order, "barcode_assignment", None)
+        if not assigned_barcode:
+            assignment.order = active_order
+            assignment.client = client
+            assignment.save(update_fields=["order", "client", "updated_at"])
+            assigned_barcode = assignment
+
+        if assigned_barcode.barcode_number != barcode_number:
+            return Response(
+                {"message": "This barcode does not match the kit assigned to your order. Please check the barcode or contact support."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        already_linked = assignment.client_id == client.id
+        if not already_linked:
+            assignment.client = client
+            assignment.order = active_order
+            assignment.save(update_fields=["client", "order", "updated_at"])
 
     has_order = getattr(assignment, "order", None)
     return Response(
@@ -1189,22 +1198,19 @@ def unlink_barcode_assignment(request):
 
     # Clear relations
     assignment.client = None
-    assignment.save(update_fields=["client", "updated_at"])
+    assignment.order = None
+    assignment.save(update_fields=["client", "order", "updated_at"])
 
     # If there was an associated active order, restore a fresh placeholder KIT- barcode
     if order:
-        order.barcode_assignment = None
-        order.save(update_fields=["barcode_assignment"])
-
         import uuid
         placeholder = "KIT-" + uuid.uuid4().hex[:8].upper()
-        placeholder_assignment = KitBarcodeAssignment.objects.create(
+        KitBarcodeAssignment.objects.create(
             client=order.client,
+            order=order,
             test_kit=order.test_kit,
             barcode_number=placeholder
         )
-        order.barcode_assignment = placeholder_assignment
-        order.save(update_fields=["barcode_assignment"])
 
     return Response({"unlinked": True}, status=status.HTTP_200_OK)
 
@@ -1319,7 +1325,7 @@ def create_barcode_assignment(request):
         return Response({"message": "barcode_number is required"}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        order = Order.objects.select_related("client", "barcode_assignment__test_kit").get(order_number=kit_code)
+        order = Order.objects.select_related("client").prefetch_related("barcode_assignments__test_kit").get(order_number=kit_code)
     except Order.DoesNotExist:
         return Response({"message": "Order not found for kit_code"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -1327,11 +1333,10 @@ def create_barcode_assignment(request):
         barcode_number=barcode_number,
         defaults={
             "client": order.client,
+            "order": order,
             "test_kit": order.test_kit,
         },
     )
-    order.barcode_assignment = assignment
-    order.save(update_fields=["barcode_assignment"])
 
     return Response(
         {
@@ -2004,9 +2009,9 @@ def client_dashboard(request):
     # ── Recent orders ───────────────────────────────────────────────
     recent_orders = Order.objects.filter(
         Q(client=client) |
-        Q(barcode_assignment__client=client) |
+        Q(barcode_assignments__client=client) |
         Q(kit_collection__user=client)
-    ).distinct().select_related("barcode_assignment__test_kit")[:5]
+    ).distinct().prefetch_related("barcode_assignments__test_kit")[:5]
 
     # ── Recommendations ─────────────────────────────────────────────
     recommendations = list(Recommendation.objects.filter(client=client).values_list('text', flat=True))

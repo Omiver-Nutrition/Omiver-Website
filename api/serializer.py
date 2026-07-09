@@ -267,6 +267,7 @@ class OrderSerializer(serializers.ModelSerializer):
     test_kit_name = serializers.CharField(source="test_kit.name", read_only=True)
     biomarker_count = serializers.IntegerField(source="test_kit.biomarker_count", read_only=True)
     barcode_number = serializers.SerializerMethodField()
+    barcode_numbers = serializers.SerializerMethodField()
     tracking_number = serializers.CharField(source="forward_tracking_number", read_only=True)
     kit_barcode = serializers.SerializerMethodField()
     collection_status = serializers.SerializerMethodField()
@@ -274,6 +275,12 @@ class OrderSerializer(serializers.ModelSerializer):
     exercise_log_id = serializers.SerializerMethodField()
     shipping_event_id = serializers.SerializerMethodField()
     result_info = serializers.SerializerMethodField()
+
+    def get_barcode_numbers(self, obj):
+        return [
+            a.barcode_number for a in obj.barcode_assignments.all()
+            if not (a.barcode_number.startswith("KIT-") or a.barcode_number == obj.order_number)
+        ]
 
     def get_barcode_number(self, obj):
         assignment = getattr(obj, "barcode_assignment", None)
@@ -323,7 +330,7 @@ class OrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = [
-            "id", "client", "test_kit", "test_kit_name", "biomarker_count", "barcode_number",
+            "id", "client", "test_kit", "test_kit_name", "biomarker_count", "barcode_number", "barcode_numbers",
             "kit_barcode", "collection_status", "diet_log_id", "exercise_log_id", "shipping_event_id", "result_info",
             "order_number", "order_date", "status", "forward_tracking_number", "return_tracking_number", "tracking_number",
             "created_at", "updated_at",
@@ -335,6 +342,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     test_kit = TestKitSerializer(read_only=True)
     delivery_events = DeliveryEventSerializer(many=True, read_only=True)
     barcode_number = serializers.SerializerMethodField()
+    barcode_numbers = serializers.SerializerMethodField()
     tracking_number = serializers.CharField(source="forward_tracking_number", read_only=True)
     kit_barcode = serializers.SerializerMethodField()
     collection_status = serializers.SerializerMethodField()
@@ -342,6 +350,12 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     exercise_log_id = serializers.SerializerMethodField()
     shipping_event_id = serializers.SerializerMethodField()
     result_info = serializers.SerializerMethodField()
+
+    def get_barcode_numbers(self, obj):
+        return [
+            a.barcode_number for a in obj.barcode_assignments.all()
+            if not (a.barcode_number.startswith("KIT-") or a.barcode_number == obj.order_number)
+        ]
 
     def get_barcode_number(self, obj):
         assignment = getattr(obj, "barcode_assignment", None)
@@ -391,7 +405,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = [
-            "id", "client", "test_kit", "barcode_number", "kit_barcode", "collection_status",
+            "id", "client", "test_kit", "barcode_number", "barcode_numbers", "kit_barcode", "collection_status",
             "diet_log_id", "exercise_log_id", "shipping_event_id", "result_info", "order_number", "order_date",
             "status", "forward_tracking_number", "return_tracking_number", "tracking_number", "delivery_events",
             "created_at", "updated_at",
@@ -496,10 +510,18 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         if barcode_number:
             assignment = KitBarcodeAssignment.objects.filter(barcode_number=barcode_number).first()
             if assignment:
+                assignment.order = order
                 assignment.client = validated_data["client"]
-                assignment.save(update_fields=["client", "updated_at"])
-                order.barcode_assignment = assignment
-                order.save(update_fields=["barcode_assignment"])
+                assignment.save(update_fields=["order", "client", "updated_at"])
+
+        for code in kit_codes:
+            code_str = str(code).strip()
+            if code_str != barcode_number:
+                assignment = KitBarcodeAssignment.objects.filter(barcode_number=code_str).first()
+                if assignment:
+                    assignment.order = order
+                    assignment.client = validated_data["client"]
+                    assignment.save(update_fields=["order", "client", "updated_at"])
 
         return order
 

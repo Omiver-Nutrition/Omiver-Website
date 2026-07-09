@@ -50,7 +50,7 @@ class OrderAdmin(admin.ModelAdmin):
     list_display = ("order_number", "client", "test_kit", "status", "tracking_number", "order_date")
     list_filter = ("status",)
     search_fields = ("order_number", "tracking_number")
-    raw_id_fields = ("client", "barcode_assignment")
+    raw_id_fields = ("client",)
     inlines = [DeliveryEventInline]
     actions = [
         "mark_as_confirmed",
@@ -156,7 +156,7 @@ class KitBarcodeAssignmentAdmin(admin.ModelAdmin):
     list_display = ("barcode_number", "client", "order", "test_kit", "collected_at", "mark_collected_link", "created_at")
     search_fields = ("barcode_number", "client__email", "order__order_number", "test_kit__name")
     list_filter = ("test_kit",)
-    raw_id_fields = ("client",)
+    raw_id_fields = ("client", "order")
     autocomplete_fields = ("test_kit",)
 
     def get_urls(self):
