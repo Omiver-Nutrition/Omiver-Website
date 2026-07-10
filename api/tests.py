@@ -99,7 +99,7 @@ class ApiSmokeTests(TestCase):
 			order_number="ORD-1001",
 			forward_tracking_number="TRK-1001",
 			return_tracking_number="RTR-1001",
-			status="PENDING",
+			status="CREATED",
 			quantity=1,
 		)
 		self.order_two = Order.objects.create(
@@ -117,7 +117,7 @@ class ApiSmokeTests(TestCase):
 			order_number="ORD-2001",
 			forward_tracking_number="TRK-2001",
 			return_tracking_number="RTR-2001",
-			status="PENDING",
+			status="CREATED",
 			quantity=1,
 		)
 		self.provider_order_approved = Order.objects.create(
@@ -126,7 +126,7 @@ class ApiSmokeTests(TestCase):
 			order_number="ORD-2002",
 			forward_tracking_number="TRK-2002",
 			return_tracking_number="RTR-2002",
-			status="PENDING",
+			status="CREATED",
 			quantity=1,
 		)
 

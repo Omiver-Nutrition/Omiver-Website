@@ -691,12 +691,14 @@ def _csv_safe(value):
 
 
 def _kit_status_to_order_status(status: str) -> str:
+    if status == "SHIPPING":
+        return "SHIPPED"
     if status in dict(Order.STATUS_CHOICES):
         return status
     return {
-        "SHIPPED": "SHIPPING",
-        "IN_TRANSIT": "SHIPPING",
-        "OUT_FOR_DELIVERY": "SHIPPING",
+        "SHIPPED": "SHIPPED",
+        "IN_TRANSIT": "SHIPPED",
+        "OUT_FOR_DELIVERY": "SHIPPED",
     }.get(status, status)
 
 
@@ -1123,7 +1125,7 @@ def link_barcode_assignment(request):
         active_order = Order.objects.create(
             client=client,
             order_number=f"ORD-{uuid.uuid4().hex[:8].upper()}",
-            status="PENDING"
+            status="CREATED"
         )
         assignment.order = active_order
         assignment.client = client
@@ -2208,6 +2210,19 @@ def collection_ship_return(request):
     collection = _sync_collection_state(order, status="SHIPPING", shipping_tracking_number=tracking_number)
     order.return_tracking_number = tracking_number
     order.save(update_fields=["return_tracking_number"])
+    return Response(KitCollectionSerializer(collection).data)
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def collection_confirm(request):
+    order_id = request.data.get("order_id")
+
+    try:
+        order = Order.objects.get(pk=order_id)
+    except Order.DoesNotExist:
+        return Response({"error": "Order not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    collection = _sync_collection_state(order, status="COLLECTED")
     return Response(KitCollectionSerializer(collection).data)
 
 @api_view(["POST"])

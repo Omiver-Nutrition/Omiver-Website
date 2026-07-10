@@ -263,17 +263,14 @@ class Order(models.Model):
 
     STATUS_CHOICES = [
         ("CREATED", "Created"),
-        ("SHIPPING", "Shipping"),
-        ("DELIVERED", "Delivered"),
-        ("COLLECTED", "Collected"),
-        ("PENDING", "Pending"),
-        ("TESTING", "Testing"),
-        ("FINISHED", "Finished"),
         ("CONFIRMED", "Order Confirmed"),
+        ("COLLECTED", "Collected"),
+        ("TESTING", "Testing"),
         ("SHIPPED", "Shipped"),
         ("IN_TRANSIT", "In Transit"),
         ("OUT_FOR_DELIVERY", "Out for Delivery"),
         ("DELIVERED", "Delivered"),
+        ("FINISHED", "Finished"),
         ("CANCELLED", "Cancelled"),
     ]
 
@@ -283,7 +280,7 @@ class Order(models.Model):
     order_number = models.CharField(max_length=50, unique=True)
     order_date = models.DateTimeField(auto_now_add=True)
     quantity = models.PositiveIntegerField(default=1, help_text="Number of kits ordered")
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="PENDING")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="CREATED")
     forward_tracking_number = models.CharField(max_length=100, blank=True)
     return_tracking_number = models.CharField(max_length=100, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

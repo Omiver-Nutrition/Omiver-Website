@@ -5,11 +5,7 @@ urlpatterns = [
     path("", views.index, name="index"),
     # meal plan api
     path("mealPlan", views.meal_plan, name="meal_plan"),
-    path(
-        "mealPlan/generate/<int:client_id>",
-        views.generate_mealPlan,
-        name="generate_mealPlan",
-    ),
+    path("mealPlan/generate/<int:client_id>",views.generate_mealPlan,name="generate_mealPlan"),
     # client api
     path("client", views.create_client, name="create_client"),
     path("client/<int:pk>", views.client_handler, name="client_handler"),
@@ -74,6 +70,7 @@ urlpatterns = [
     path("collection/<int:order_id>", views.get_kit_collection, name="get_kit_collection"),
     path("collection/scan", views.collection_scan, name="collection_scan"),
     path("collection/log", views.collection_log, name="collection_log"),
+    path("collection/confirm", views.collection_confirm, name="collection_confirm"),
     path("collection/ship", views.collection_ship_return, name="collection_ship_return"),
 
     # Vendor Endpoints
