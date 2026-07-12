@@ -66,6 +66,7 @@ class ApiSmokeTests(TestCase):
 			type="PROVIDER",
 		)
 		self.patient = Client.objects.create(
+			user=self.web_user,
 			email="patient@example.com",
 			first_name="Casey",
 			last_name="Jones",
@@ -235,6 +236,26 @@ class ApiSmokeTests(TestCase):
 		self.assertEqual(patch_response.status_code, 200)
 		self.patient.refresh_from_db()
 		self.assertEqual(self.patient.first_name, "Updated")
+
+	def test_client_name_is_encrypted_in_db(self):
+		from django.db import connection
+		client = Client.objects.create(
+			email="encrypted-test@example.com",
+			first_name="SuperSecretName",
+			last_name="SuperSecretLastName",
+		)
+		self.assertEqual(client.first_name, "SuperSecretName")
+		self.assertEqual(client.last_name, "SuperSecretLastName")
+
+		with connection.cursor() as cursor:
+			cursor.execute("SELECT first_name, last_name FROM core_client WHERE id = %s", [client.id])
+			row = cursor.fetchone()
+			db_first_name, db_last_name = row[0], row[1]
+
+		self.assertNotEqual(db_first_name, "SuperSecretName")
+		self.assertNotEqual(db_last_name, "SuperSecretLastName")
+		self.assertTrue(db_first_name.startswith("U2FsdGVkX1"))
+		self.assertTrue(db_last_name.startswith("U2FsdGVkX1"))
 
 	def test_client_handler_patch_creates_recall_logs(self):
 		response = self.api_client.patch(

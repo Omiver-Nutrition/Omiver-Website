@@ -3,6 +3,10 @@ from django.utils import timezone
 from datetime import datetime, timedelta
 import uuid
 from decimal import Decimal
+from .fields import (
+    EncryptedCharField, EncryptedTextField, EncryptedIntegerField,
+    EncryptedFloatField, EncryptedDateField
+)
 
 
 class Biomarker(models.Model):
@@ -492,31 +496,31 @@ class Client(models.Model):
     # extra fields
     id = models.AutoField(primary_key=True)
     email = models.EmailField(unique=True)
-    first_name = models.CharField(max_length=100, blank=True)
-    last_name = models.CharField(max_length=100, blank=True)
+    first_name = EncryptedCharField(max_length=255, blank=True)
+    last_name = EncryptedCharField(max_length=255, blank=True)
     type = models.CharField(max_length=10, choices=USER_TYPES, default="INDIVIDUAL")
-    date_of_birth = models.DateField(blank=True, null=True)
-    bio=models.TextField(max_length=500, blank=True)
-    location = models.CharField(max_length=30, blank=True)
+    date_of_birth = EncryptedDateField(blank=True, null=True)
+    bio = EncryptedTextField(max_length=500, blank=True)
+    location = EncryptedCharField(max_length=255, blank=True)
     profile_pic = models.ImageField(upload_to='profile_pics', blank=True)
-    gender = models.CharField(max_length=10, blank=True)
-    height = models.FloatField(blank=True, null=True)
-    weight = models.FloatField(blank=True, null=True)
-    ethnicity = models.CharField(max_length=100, blank=True)
-    sport = models.CharField(max_length=100, blank=True)
-    health_conditions = models.TextField(max_length=100, blank=True)
-    dietary_preferences = models.TextField(max_length=100, blank=True)
-    allergies = models.TextField(max_length=100, blank=True)
-    dietary_typicality = models.PositiveSmallIntegerField(null=True, blank=True, help_text="How typical the 24-hour recall is on a 5-level scale from unusual to always")
-    dietary_preference_mode = models.CharField(max_length=20, blank=True, help_text="Whether the client wants similar or different recommendations")
-    preferred_cuisines = models.TextField(blank=True)
-    avoided_cuisines = models.TextField(blank=True)
-    weekly_exercise_routine = models.TextField(blank=True)
-    exercise_days_per_week = models.PositiveSmallIntegerField(null=True, blank=True)
-    exercise_types = models.TextField(blank=True)
-    provider_notes = models.TextField(blank=True)
-    fitness_goal = models.CharField(max_length=100, blank=True)
-    nutritional_goal = models.TextField(blank=True)
+    gender = EncryptedCharField(max_length=255, blank=True)
+    height = EncryptedFloatField(blank=True, null=True)
+    weight = EncryptedFloatField(blank=True, null=True)
+    ethnicity = EncryptedCharField(max_length=255, blank=True)
+    sport = EncryptedCharField(max_length=255, blank=True)
+    health_conditions = EncryptedTextField(max_length=255, blank=True)
+    dietary_preferences = EncryptedTextField(max_length=255, blank=True)
+    allergies = EncryptedTextField(max_length=255, blank=True)
+    dietary_typicality = EncryptedIntegerField(null=True, blank=True, help_text="How typical the 24-hour recall is on a 5-level scale from unusual to always")
+    dietary_preference_mode = EncryptedCharField(max_length=255, blank=True, help_text="Whether the client wants similar or different recommendations")
+    preferred_cuisines = EncryptedTextField(blank=True)
+    avoided_cuisines = EncryptedTextField(blank=True)
+    weekly_exercise_routine = EncryptedTextField(blank=True)
+    exercise_days_per_week = EncryptedIntegerField(null=True, blank=True)
+    exercise_types = EncryptedTextField(blank=True)
+    provider_notes = EncryptedTextField(blank=True)
+    fitness_goal = EncryptedCharField(max_length=255, blank=True)
+    nutritional_goal = EncryptedTextField(blank=True)
     # Referral system
     referral_code = models.CharField(
         max_length=16, unique=True, blank=True, null=True,
@@ -537,7 +541,7 @@ class Client(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"<Client {self.first_name} {self.last_name} ({self.email})>"
+        return f"Client {self.id} ({self.email})"
 
     @staticmethod
     def get_client_by_email(email) -> "Client":

@@ -13,26 +13,31 @@
     }
   },
   {
-    "model": "core.order",
-    "pk": 2,
+    "model": "core.kitbarcodeassignment",
+    "pk": 1,
     "fields": {
-      "order_number": "ORD-002",
-      "order_date": "2024-06-02T00:00:00Z",
-      "status": "SHIPPED",
-      "forward_tracking_number": "TRACK654321",
-      "client": 1,
-      "barcode_assignment": 1,
+      "test_kit": 1,
+      "barcode_number": "21191290",
       "created_at": "2024-06-02T00:00:00Z",
       "updated_at": "2024-06-02T00:00:00Z"
     }
   },
   {
     "model": "core.kitbarcodeassignment",
-    "pk": 1,
+    "pk": 2,
     "fields": {
-      "client": 1,
       "test_kit": 1,
-      "barcode_number": "21191290",
+      "barcode_number": "999123",
+      "created_at": "2024-06-02T00:00:00Z",
+      "updated_at": "2024-06-02T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.kitbarcodeassignment",
+    "pk": 3,
+    "fields": {
+      "test_kit": 1,
+      "barcode_number": "999124",
       "created_at": "2024-06-02T00:00:00Z",
       "updated_at": "2024-06-02T00:00:00Z"
     }

@@ -6,7 +6,6 @@ from django.urls import path, reverse
 from django.utils import timezone
 from django.utils.html import format_html
 from .models import (
-    Client,
     TestKit, Order, KitBarcodeAssignment, DeliveryEvent, ShippingInfo, PaymentInfo, BillingAddress, Purchase, ShippingAddress,
     DietLog, ExerciseLog,
     Biomarker, BiomarkerTest, BiomarkerResult, KitCollection, KitResult,
@@ -35,14 +34,6 @@ class ShippingInfoAdmin(admin.ModelAdmin):
 class TestKitAdmin(admin.ModelAdmin):
     list_display = ("name", "biomarker_count", "price")
     search_fields = ("name",)
-
-
-@admin.register(Client)
-class ClientAdmin(admin.ModelAdmin):
-    list_display = ("email", "first_name", "last_name", "type", "referral_code", "created_at")
-    search_fields = ("email", "first_name", "last_name", "referral_code")
-    list_filter = ("type", "created_at")
-    readonly_fields = ("created_at", "updated_at")
 
 
 @admin.register(Order)
