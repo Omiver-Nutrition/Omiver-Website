@@ -44,7 +44,7 @@ class EncryptedTextField(models.TextField):
         return value
 
 
-class EncryptedIntegerField(models.IntegerField):
+class EncryptedIntegerField(models.TextField):
     description = "An encrypted integer field using AES-256 via OpenSSL"
 
     def get_prep_value(self, value):
@@ -71,7 +71,7 @@ class EncryptedIntegerField(models.IntegerField):
         return value
 
 
-class EncryptedFloatField(models.FloatField):
+class EncryptedFloatField(models.TextField):
     description = "An encrypted float field using AES-256 via OpenSSL"
 
     def get_prep_value(self, value):
@@ -98,7 +98,7 @@ class EncryptedFloatField(models.FloatField):
         return value
 
 
-class EncryptedDateField(models.DateField):
+class EncryptedDateField(models.TextField):
     description = "An encrypted date field using AES-256 via OpenSSL"
 
     def get_prep_value(self, value):
