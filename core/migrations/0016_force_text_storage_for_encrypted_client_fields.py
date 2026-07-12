@@ -3,6 +3,25 @@
 from django.db import migrations
 
 
+def forwards_func(apps, schema_editor):
+    if schema_editor.connection.vendor == 'postgresql':
+        with schema_editor.connection.cursor() as cursor:
+            cursor.execute("ALTER TABLE core_client ALTER COLUMN date_of_birth TYPE text USING date_of_birth::text")
+            cursor.execute("ALTER TABLE core_client ALTER COLUMN dietary_typicality TYPE text USING dietary_typicality::text")
+            cursor.execute("ALTER TABLE core_client ALTER COLUMN exercise_days_per_week TYPE text USING exercise_days_per_week::text")
+            cursor.execute("ALTER TABLE core_client ALTER COLUMN height TYPE text USING height::text")
+            cursor.execute("ALTER TABLE core_client ALTER COLUMN weight TYPE text USING weight::text")
+
+def backwards_func(apps, schema_editor):
+    if schema_editor.connection.vendor == 'postgresql':
+        with schema_editor.connection.cursor() as cursor:
+            cursor.execute("ALTER TABLE core_client ALTER COLUMN date_of_birth TYPE date USING NULLIF(date_of_birth, '')::date")
+            cursor.execute("ALTER TABLE core_client ALTER COLUMN dietary_typicality TYPE integer USING NULLIF(dietary_typicality, '')::integer")
+            cursor.execute("ALTER TABLE core_client ALTER COLUMN exercise_days_per_week TYPE integer USING NULLIF(exercise_days_per_week, '')::integer")
+            cursor.execute("ALTER TABLE core_client ALTER COLUMN height TYPE double precision USING NULLIF(height, '')::double precision")
+            cursor.execute("ALTER TABLE core_client ALTER COLUMN weight TYPE double precision USING NULLIF(weight, '')::double precision")
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -10,20 +29,5 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunSQL(
-            sql=[
-                "ALTER TABLE core_client ALTER COLUMN date_of_birth TYPE text USING date_of_birth::text",
-                "ALTER TABLE core_client ALTER COLUMN dietary_typicality TYPE text USING dietary_typicality::text",
-                "ALTER TABLE core_client ALTER COLUMN exercise_days_per_week TYPE text USING exercise_days_per_week::text",
-                "ALTER TABLE core_client ALTER COLUMN height TYPE text USING height::text",
-                "ALTER TABLE core_client ALTER COLUMN weight TYPE text USING weight::text",
-            ],
-            reverse_sql=[
-                "ALTER TABLE core_client ALTER COLUMN date_of_birth TYPE date USING NULLIF(date_of_birth, '')::date",
-                "ALTER TABLE core_client ALTER COLUMN dietary_typicality TYPE integer USING NULLIF(dietary_typicality, '')::integer",
-                "ALTER TABLE core_client ALTER COLUMN exercise_days_per_week TYPE integer USING NULLIF(exercise_days_per_week, '')::integer",
-                "ALTER TABLE core_client ALTER COLUMN height TYPE double precision USING NULLIF(height, '')::double precision",
-                "ALTER TABLE core_client ALTER COLUMN weight TYPE double precision USING NULLIF(weight, '')::double precision",
-            ],
-        ),
+        migrations.RunPython(forwards_func, backwards_func),
     ]

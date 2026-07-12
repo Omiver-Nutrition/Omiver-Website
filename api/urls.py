@@ -25,6 +25,9 @@ urlpatterns = [
     # password reset via API for SPA
     path("password-reset", views.password_reset_request, name="password_reset_request"),
     path("password-reset/confirm", views.password_reset_confirm, name="password_reset_confirm"),
+    path("password-recovery/question", views.get_security_question, name="get_security_question"),
+    path("password-recovery/verify-answer", views.verify_security_question_answer, name="verify_security_question_answer"),
+    path("password-recovery/reset-with-token", views.reset_password_with_token, name="reset_password_with_token"),
     # test kits
     path("kits", views.list_kits, name="list_kits"),
     # orders & shipping tracking

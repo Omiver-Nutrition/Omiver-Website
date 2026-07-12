@@ -22,6 +22,13 @@ class ClientSerializer(serializers.ModelSerializer):
     billing_city = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
     billing_state = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
     billing_zip = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
+    security_answer = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
+    def validate_security_answer(self, value):
+        if value:
+            from django.contrib.auth.hashers import make_password
+            return make_password(value.strip().lower())
+        return value
 
     def _store_recall_logs(self, instance, dietary_recall=None, exercise_recall=None):
         if dietary_recall is not None and str(dietary_recall).strip():
@@ -192,6 +199,9 @@ class ClientSerializer(serializers.ModelSerializer):
             "billing_city",
             "billing_state",
             "billing_zip",
+            # Security Question fields
+            "security_question",
+            "security_answer",
         ]
         read_only_fields = ["referral_code", "referred_by"]
 

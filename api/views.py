@@ -372,6 +372,134 @@ def password_reset_confirm(request):
     return Response({"message": "Password has been reset successfully"}, status=status.HTTP_200_OK)
 
 
+@extend_schema(
+    summary="Get security question for password recovery",
+    description="Accepts email to retrieve the user's configured security question.",
+    request=inline_serializer(
+        name="GetSecurityQuestionRequest",
+        fields={"email": serializers.EmailField()},
+    ),
+    responses={200: inline_serializer(
+        name="GetSecurityQuestionResponse",
+        fields={"security_question": serializers.CharField(), "security_question_display": serializers.CharField()}
+    )},
+    tags=["Auth"],
+)
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def get_security_question(request):
+    email = (request.data.get("email") or "").strip()
+    if not email:
+        return Response({"message": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = User.objects.get(username=email)
+        client = Client.objects.get(user=user)
+    except (User.DoesNotExist, Client.DoesNotExist):
+        return Response({"message": "User with this email does not exist"}, status=status.HTTP_404_NOT_FOUND)
+
+    if not client.security_question or not client.security_answer:
+        return Response({"message": "Security questions are not configured for this account"}, status=status.HTTP_400_BAD_REQUEST)
+
+    question_display = dict(Client.SECURITY_QUESTIONS).get(client.security_question, "")
+    return Response({
+        "security_question": client.security_question,
+        "security_question_display": question_display
+    }, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    summary="Verify security question answer",
+    description="Accepts email, security_question, and security_answer. If valid, returns a temporary signed reset token.",
+    request=inline_serializer(
+        name="VerifySecurityQuestionAnswerRequest",
+        fields={
+            "email": serializers.EmailField(),
+            "security_question": serializers.CharField(),
+            "security_answer": serializers.CharField(),
+        },
+    ),
+    responses={200: inline_serializer(name="VerifySecurityQuestionAnswerResponse", fields={"token": serializers.CharField()} )},
+    tags=["Auth"],
+)
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def verify_security_question_answer(request):
+    email = (request.data.get("email") or "").strip()
+    security_question = request.data.get("security_question")
+    security_answer = (request.data.get("security_answer") or "").strip().lower()
+
+    if not email or not security_question or not security_answer:
+        return Response({"message": "email, security_question, and security_answer are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = User.objects.get(username=email)
+        print(f"Found user: {user.username}")
+        client = Client.objects.get(user=user)
+    except (User.DoesNotExist, Client.DoesNotExist):
+        return Response({"message": "User not found"}, status=status.HTTP_400_BAD_REQUEST)
+
+    if not client.security_question or not client.security_answer:
+        return Response({"message": "Invalid security question or answer"}, status=status.HTTP_400_BAD_REQUEST)
+
+    if client.security_question != security_question:
+        return Response({"message": "Invalid security question, please try again"}, status=status.HTTP_400_BAD_REQUEST)
+
+    from django.contrib.auth.hashers import check_password
+    if not check_password(security_answer, client.security_answer):
+        return Response({"message": "Invalid security answer"}, status=status.HTTP_400_BAD_REQUEST)
+
+    from django.core import signing
+    token = signing.dumps({"user_id": user.pk, "purpose": "password-recovery"})
+    return Response({"token": token}, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    summary="Reset password with recovery token",
+    description="Accepts a temporary signed reset token and new_password to complete password recovery.",
+    request=inline_serializer(
+        name="ResetPasswordWithTokenRequest",
+        fields={
+            "token": serializers.CharField(),
+            "new_password": serializers.CharField(),
+        },
+    ),
+    responses={200: inline_serializer(name="ResetPasswordWithTokenResponse", fields={"message": serializers.CharField()} )},
+    tags=["Auth"],
+)
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def reset_password_with_token(request):
+    token = request.data.get("token")
+    new_password = request.data.get("new_password")
+
+    if not token or not new_password:
+        return Response({"message": "token and new_password are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    from django.core import signing
+    try:
+        data = signing.loads(token, max_age=600)  # expires in 10 minutes
+        if data.get("purpose") != "password-recovery":
+            raise signing.BadSignature()
+        user_id = data.get("user_id")
+        user = User.objects.get(pk=user_id)
+    except (signing.SignatureExpired, signing.BadSignature, User.DoesNotExist):
+        return Response({"message": "Invalid or expired token"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Validate new password strength
+    try:
+        validate_password(new_password, user=user)
+    except ValidationError as exc:
+        return Response({"password": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+
+    user.set_password(new_password)
+    user.save()
+    return Response({"message": "Password has been reset successfully"}, status=status.HTTP_200_OK)
+
+
 
 @extend_schema(
     summary="Get provider referral info",

@@ -339,6 +339,86 @@ class ApiSmokeTests(TestCase):
 		user.refresh_from_db()
 		self.assertTrue(user.check_password("NewOmiverSecure2026!"))
 
+	def test_get_security_question_success(self):
+		from django.contrib.auth.hashers import make_password
+		user = User.objects.create_user(username="recovery-test@example.com", email="recovery-test@example.com", password="OmiverSecure2026!")
+		client = Client.objects.create(
+			user=user,
+			email="recovery-test@example.com",
+			security_question="PET",
+			security_answer=make_password("fluffy")
+		)
+		payload = {"email": "recovery-test@example.com"}
+		response = self.public_client.post(reverse("get_security_question"), payload, format="json")
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data["security_question"], "PET")
+		self.assertEqual(response.data["security_question_display"], "What was the name of your first pet?")
+
+	def test_get_security_question_nonexistent_user_fails(self):
+		payload = {"email": "nonexistent@example.com"}
+		response = self.public_client.post(reverse("get_security_question"), payload, format="json")
+		self.assertEqual(response.status_code, 404)
+		self.assertEqual(response.data["message"], "User with this email does not exist")
+
+	def test_verify_security_question_answer_success(self):
+		from django.contrib.auth.hashers import make_password
+		user = User.objects.create_user(username="verify-success@example.com", email="verify-success@example.com", password="OmiverSecure2026!")
+		client = Client.objects.create(
+			user=user,
+			email="verify-success@example.com",
+			security_question="PET",
+			security_answer=make_password("fluffy")
+		)
+		payload = {
+			"email": "verify-success@example.com",
+			"security_question": "PET",
+			"security_answer": "fluffy",
+		}
+		response = self.public_client.post(reverse("verify_security_question_answer"), payload, format="json")
+		self.assertEqual(response.status_code, 200)
+		self.assertIn("token", response.data)
+
+	def test_verify_security_question_answer_fails(self):
+		from django.contrib.auth.hashers import make_password
+		user = User.objects.create_user(username="verify-fail@example.com", email="verify-fail@example.com", password="OmiverSecure2026!")
+		client = Client.objects.create(
+			user=user,
+			email="verify-fail@example.com",
+			security_question="PET",
+			security_answer=make_password("fluffy")
+		)
+		payload = {
+			"email": "verify-fail@example.com",
+			"security_question": "PET",
+			"security_answer": "wronganswer",
+		}
+		response = self.public_client.post(reverse("verify_security_question_answer"), payload, format="json")
+		self.assertEqual(response.status_code, 400)
+		self.assertEqual(response.data["message"], "Invalid security question or answer")
+
+	def test_reset_password_with_token_success(self):
+		user = User.objects.create_user(username="reset-token-success@example.com", email="reset-token-success@example.com", password="OmiverSecure2026!")
+		from django.core import signing
+		token = signing.dumps({"user_id": user.pk, "purpose": "password-recovery"})
+		payload = {
+			"token": token,
+			"new_password": "NewOmiverSecure2026!",
+		}
+		response = self.public_client.post(reverse("reset_password_with_token"), payload, format="json")
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data["message"], "Password has been reset successfully")
+		user.refresh_from_db()
+		self.assertTrue(user.check_password("NewOmiverSecure2026!"))
+
+	def test_reset_password_with_token_invalid_fails(self):
+		payload = {
+			"token": "invalidtokenstring",
+			"new_password": "NewOmiverSecure2026!",
+		}
+		response = self.public_client.post(reverse("reset_password_with_token"), payload, format="json")
+		self.assertEqual(response.status_code, 400)
+		self.assertEqual(response.data["message"], "Invalid or expired token")
+
 	def test_default_shipping_address_endpoint(self):
 		# create two addresses, one default
 		ShippingAddress.objects.create(

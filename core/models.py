@@ -491,8 +491,17 @@ class KitResult(models.Model):
 
 class Client(models.Model):
     USER_TYPES = [("PROVIDER", "healthcare"), ("INDIVIDUAL", "individual")]
+    SECURITY_QUESTIONS = [
+        ("PET", "What was the name of your first pet?"),
+        ("MOTHER", "What is your mother's maiden name?"),
+        ("CITY", "In what city were you born?"),
+        ("SCHOOL", "What was the name of your first school?"),
+        ("CAR", "What was the make of your first car?"),
+    ]
     # link to auth.user
     user = models.OneToOneField("auth.User", on_delete=models.CASCADE, blank=True, null=True)
+    security_question = models.CharField(max_length=255, choices=SECURITY_QUESTIONS, blank=True)
+    security_answer = models.CharField(max_length=255, blank=True)
     # extra fields
     id = models.AutoField(primary_key=True)
     email = models.EmailField(unique=True)
