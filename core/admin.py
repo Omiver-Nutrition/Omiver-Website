@@ -6,7 +6,7 @@ from django.urls import path, reverse
 from django.utils import timezone
 from django.utils.html import format_html
 from .models import (
-    TestKit, Order, KitBarcodeAssignment, DeliveryEvent, ShippingInfo, PaymentInfo, BillingAddress, Purchase, ShippingAddress,
+    Client, TestKit, Order, KitBarcodeAssignment, DeliveryEvent, ShippingInfo, PaymentInfo, BillingAddress, Purchase, ShippingAddress,
     DietLog, ExerciseLog,
     Biomarker, BiomarkerTest, BiomarkerResult, KitCollection, KitResult,
 )
@@ -16,6 +16,14 @@ class DeliveryEventInline(admin.TabularInline):
     model = DeliveryEvent
     extra = 0
     readonly_fields = ("timestamp",)
+
+
+@admin.register(Client)
+class ClientAdmin(admin.ModelAdmin):
+    list_display = ("id", "email", "first_name", "last_name", "type", "created_at")
+    search_fields = ("email", "first_name", "last_name", "referral_code")
+    list_filter = ("type", "created_at")
+    raw_id_fields = ("user", "referred_by")
 
 
 class BillingAddressInline(admin.StackedInline):

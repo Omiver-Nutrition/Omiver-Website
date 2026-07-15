@@ -1,6 +1,8 @@
 www.omiver.me {
     root * /srv/static
-    file_server /static/*
+    handle_path /static/* {
+        file_server
+    }
 
     handle /app* {
         reverse_proxy frontend:3000

@@ -27,16 +27,22 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-7z!bv1d43a&a5*b0gdfm_&x5yywoz9sv-1#d24qdjf6mc8m!-="
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY") 
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv("DJANGO_DEBUG", "False").upper()=="TRUE"
 
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS").split(",")
 
 CSRF_TRUSTED_ORIGINS = ["https://*.127.0.0.1","https://www.omiver.me", "http://localhost:3000", "http://localhost:5173"]
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", "False").upper()=="TRUE"
+CORS_ALLOWED_ORIGIN = [
+        "https://www.omiver.me",
+        "https://omiver.me",
+        "http://localhost:3000",
+        "http://localhost:5173",
+        ]
 CORS_ALLOW_CREDENTIALS = True
 
 # Application definition
@@ -159,7 +165,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # Default primary key field type
