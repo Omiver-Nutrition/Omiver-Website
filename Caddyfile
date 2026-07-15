@@ -4,10 +4,6 @@ www.omiver.me {
         file_server
     }
 
-    handle /app* {
-        reverse_proxy frontend:3000
-    }
-
     # Send API traffic to Django and keep the frontend mounted under /app.
     handle /api/* {
         reverse_proxy http://web:8000
