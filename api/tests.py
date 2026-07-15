@@ -394,7 +394,7 @@ class ApiSmokeTests(TestCase):
 		}
 		response = self.public_client.post(reverse("verify_security_question_answer"), payload, format="json")
 		self.assertEqual(response.status_code, 400)
-		self.assertEqual(response.data["message"], "Invalid security question or answer")
+		self.assertEqual(response.data["message"], "Invalid security answer")
 
 	def test_reset_password_with_token_success(self):
 		user = User.objects.create_user(username="reset-token-success@example.com", email="reset-token-success@example.com", password="OmiverSecure2026!")

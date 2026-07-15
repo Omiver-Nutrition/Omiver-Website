@@ -8,11 +8,15 @@ class EncryptedCharField(models.CharField):
     def get_prep_value(self, value):
         value = super().get_prep_value(value)
         if value:
+            if str(value).startswith("client_enc:"):
+                return value
             return encrypt(str(value))
         return value
 
     def from_db_value(self, value, expression, connection):
         if value:
+            if str(value).startswith("client_enc:"):
+                return value
             try:
                 return decrypt(value)
             except Exception:

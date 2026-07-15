@@ -507,6 +507,7 @@ class Client(models.Model):
     email = models.EmailField(unique=True)
     first_name = EncryptedCharField(max_length=255, blank=True)
     last_name = EncryptedCharField(max_length=255, blank=True)
+    use_custom_key = models.BooleanField(default=False)
     type = models.CharField(max_length=10, choices=USER_TYPES, default="INDIVIDUAL")
     date_of_birth = EncryptedDateField(blank=True, null=True)
     bio = EncryptedTextField(max_length=500, blank=True)
