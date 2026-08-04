@@ -22,7 +22,7 @@ class Biomarker(models.Model):
     ]
 
     id = models.AutoField(primary_key=True)
-    name = models.CharField(max_length=100, unique=True, db_index=True)
+    name = models.CharField(max_length=255, unique=True, db_index=True)
     description = models.TextField(blank=True)
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default="OTHER")
     range_min = models.FloatField(help_text="Normal range lower bound")
@@ -40,6 +40,7 @@ class BiomarkerTest(models.Model):
 
     id = models.AutoField(primary_key=True)
     client = models.ForeignKey("Client", on_delete=models.CASCADE, related_name="biomarker_tests")
+    barcode_assignment = models.ForeignKey("KitBarcodeAssignment", on_delete=models.SET_NULL, null=True, blank=True, related_name="biomarker_tests")
     data = models.JSONField(blank=True, null=True, help_text="Legacy raw data")
     recorded_at = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
@@ -474,20 +475,6 @@ class KitCollection(models.Model):
         return f"Kit collection {self.kit_barcode} – {self.status}"
 
 
-class KitResult(models.Model):
-    """Stores the final result payload for a kit barcode."""
-
-    id = models.AutoField(primary_key=True)
-    kit_barcode = models.CharField(max_length=100, unique=True, db_index=True)
-    result_info = models.TextField()
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ["-created_at"]
-
-    def __str__(self):
-        return f"Result for {self.kit_barcode}"
 
 class Client(models.Model):
     USER_TYPES = [("PROVIDER", "healthcare"), ("INDIVIDUAL", "individual")]
@@ -551,7 +538,7 @@ class Client(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"Client {self.id} ({self.email})"
+        return f"Client {self.id}"
 
     @staticmethod
     def get_client_by_email(email) -> "Client":

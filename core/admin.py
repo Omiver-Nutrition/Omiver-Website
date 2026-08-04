@@ -8,7 +8,7 @@ from django.utils.html import format_html
 from .models import (
     Client, TestKit, Order, KitBarcodeAssignment, DeliveryEvent, ShippingInfo, PaymentInfo, BillingAddress, Purchase, ShippingAddress,
     DietLog, ExerciseLog,
-    Biomarker, BiomarkerTest, BiomarkerResult, KitCollection, KitResult,
+    Biomarker, BiomarkerTest, BiomarkerResult, KitCollection,
 )
 
 
@@ -18,12 +18,12 @@ class DeliveryEventInline(admin.TabularInline):
     readonly_fields = ("timestamp",)
 
 
-@admin.register(Client)
-class ClientAdmin(admin.ModelAdmin):
-    list_display = ("id", "email", "first_name", "last_name", "type", "created_at")
-    search_fields = ("email", "first_name", "last_name", "referral_code")
-    list_filter = ("type", "created_at")
-    raw_id_fields = ("user", "referred_by")
+#@admin.register(Client)
+#class ClientAdmin(admin.ModelAdmin):
+#    list_display = ("id", "email", "first_name", "last_name", "type", "created_at")
+#    search_fields = ("email", "first_name", "last_name", "referral_code")
+#    list_filter = ("type", "created_at")
+#    raw_id_fields = ("user", "referred_by")
 
 
 class BillingAddressInline(admin.StackedInline):
@@ -341,11 +341,6 @@ class KitBarcodeAssignmentAdmin(admin.ModelAdmin):
                             order.status = "FINISHED"
                             order.save(update_fields=["status", "updated_at"])
 
-                        # Create or update KitResult
-                        KitResult.objects.update_or_create(
-                            kit_barcode=barcode,
-                            defaults={"result_info": f"Imported results successfully."}
-                        )
 
                 # 5. Trigger AI recommendation drafts for the imported tests!
                 triggered_count = 0
@@ -443,9 +438,4 @@ class KitCollectionAdmin(admin.ModelAdmin):
     list_filter = ("status",)
     search_fields = ("kit_barcode", "user__email", "order__order_number")
 
-
-@admin.register(KitResult)
-class KitResultAdmin(admin.ModelAdmin):
-    list_display = ("kit_barcode", "created_at")
-    search_fields = ("kit_barcode",)
 

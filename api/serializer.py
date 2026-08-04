@@ -266,11 +266,6 @@ class KitCollectionSerializer(serializers.ModelSerializer):
         ]
 
 
-class KitResultSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = KitResult
-        fields = ["id", "kit_barcode", "result_info", "created_at", "updated_at"]
-
 
 class OrderSerializer(serializers.ModelSerializer):
     """Used for list views — lightweight."""
@@ -333,10 +328,13 @@ class OrderSerializer(serializers.ModelSerializer):
 
     def get_result_info(self, obj):
         collection = self._collection(obj)
-        if not collection:
+        if not collection or not collection.kit_barcode:
             return None
-        result = KitResult.objects.filter(kit_barcode=collection.kit_barcode).first()
-        return result.result_info if result else None
+        test = BiomarkerTest.objects.filter(barcode_assignment__barcode_number=collection.kit_barcode).first()
+        if test:
+            # We can return test recorded time or status
+            return f"Results loaded successfully."
+        return None
 
     class Meta:
         model = Order
@@ -408,10 +406,13 @@ class OrderDetailSerializer(serializers.ModelSerializer):
 
     def get_result_info(self, obj):
         collection = self._collection(obj)
-        if not collection:
+        if not collection or not collection.kit_barcode:
             return None
-        result = KitResult.objects.filter(kit_barcode=collection.kit_barcode).first()
-        return result.result_info if result else None
+        from core.models import BiomarkerTest
+        test = BiomarkerTest.objects.filter(barcode_assignment__barcode_number=collection.kit_barcode).first()
+        if test:
+            return f"Results loaded successfully."
+        return None
 
     class Meta:
         model = Order

@@ -41,11 +41,11 @@ from .serializer import (
 from core.models import (
     MealPlan, Client, TestKit, Order, DeliveryEvent,
     KitBarcodeAssignment,
-    KitCollection, KitResult, DietLog, ExerciseLog,
+    KitCollection, DietLog, ExerciseLog,
     PaymentInfo, BillingAddress, Purchase, ShippingInfo,
     ShippingAddress,
     Biomarker, BiomarkerTest, BiomarkerResult,
-    Membership, Recommendation, KitCollection, KitResult,
+    Membership, Recommendation, KitCollection,
 )
 from .barcode_manager import (
     BarcodeManager,
@@ -929,10 +929,6 @@ def _sync_collection_state(
         order.forward_tracking_number = shipping_tracking_number.strip()
 
     if result_info is not None:
-        KitResult.objects.update_or_create(
-            kit_barcode=collection.kit_barcode,
-            defaults={"result_info": result_info},
-        )
         if status is None:
             order.status = "FINISHED"
 
@@ -2287,7 +2283,6 @@ def vendor_finish_kit(request):
     else:
         collection.status = "FINISHED"
         collection.save()
-        KitResult.objects.create(kit_barcode=kit_barcode, result_info=result_info)
     return Response({"status": "FINISHED"})
 
 
