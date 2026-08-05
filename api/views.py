@@ -1957,6 +1957,23 @@ def biomarker_test_detail(request, pk):
         return Response({"error": "Test not found"}, status.HTTP_404_NOT_FOUND)
     return Response(BiomarkerTestDetailSerializer(test).data)
 
+def compute_biomarker_status(bm, value):
+    if bm.optimal_min is not None and bm.optimal_max is not None:
+        if bm.optimal_min <= value <= bm.optimal_max:
+            return "OPTIMAL"
+        elif bm.range_min <= value <= bm.range_max:
+            return "NORMAL"
+        elif value < bm.range_min:
+            return "LOW"
+        else:
+            return "HIGH"
+    else:
+        if bm.range_min <= value <= bm.range_max:
+            return "NORMAL"
+        elif value < bm.range_min:
+            return "LOW"
+        else:
+            return "HIGH"
 
 @extend_schema(
     summary="Client dashboard",
@@ -2002,8 +2019,6 @@ def client_dashboard(request):
     latest_test = (
         BiomarkerTest.objects
         .filter(client=client)
-        .prefetch_related("results__biomarker")
-        .order_by("-recorded_at")
         .first()
     )
 
@@ -2012,19 +2027,30 @@ def client_dashboard(request):
     total_markers = 0
     optimal_count = 0
 
-    if latest_test:
-        results = latest_test.results.select_related("biomarker").all()
+    if latest_test and latest_test.data and "result" in latest_test.data:
         grouped = defaultdict(list)
-        for r in results:
+        biomarker_ids = [r["ionIdx"] for r in latest_test.data["result"] if "ionIdx" in r]
+        biomarkers = {bm.id: bm for bm in Biomarker.objects.filter(id__in=biomarker_ids)}
+
+        for r in latest_test.data["result"]:
+            ion_idx = r.get("ionIdx")
+            value = r.get("value")
+            if ion_idx is None or value is None:
+                continue
+            bm = biomarkers.get(ion_idx)
+            if not bm:
+                continue
+
             total_markers += 1
-            if r.status in ("OPTIMAL", "NORMAL"):
+            status = compute_biomarker_status(bm, value)
+            if status in ("OPTIMAL", "NORMAL"):
                 optimal_count += 1
-            grouped[r.biomarker.get_category_display()].append({
-                "biomarker_name": r.biomarker.name,
-                "value": r.value,
-                "unit": r.biomarker.unit,
-                "status": r.status,
-                "normal_range": f"Normal: {r.biomarker.range_min}-{r.biomarker.range_max}",
+            grouped[bm.get_category_display()].append({
+                "biomarker_name": bm.name,
+                "value": value,
+                "unit": bm.unit,
+                "status": status,
+                "normal_range": f"Normal: {bm.range_min}-{bm.range_max}",
             })
 
         categorized_results = {

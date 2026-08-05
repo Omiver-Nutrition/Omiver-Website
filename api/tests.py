@@ -178,6 +178,7 @@ class ApiSmokeTests(TestCase):
 		self.biomarker_test = BiomarkerTest.objects.create(
 			client=self.patient,
 			recorded_at=timezone.now() - timedelta(days=1),
+            data={"result": [{"ionIdx": self.biomarker.id, "value": 85}]}
 		)
 		self.biomarker_result = BiomarkerResult.objects.create(
 			test=self.biomarker_test,
@@ -528,7 +529,7 @@ class ApiSmokeTests(TestCase):
 		response = self.api_client.get(reverse("generate_mealPlan", args=[self.patient.id]))
 
 		self.assertEqual(response.status_code, 200)
-		self.assertIn(self.patient.email, response.data["message"])
+        self.assertIn(str(self.patient), response.data["message"])
 
 	def test_meal_plan_returns_results_for_client(self):
 		response = self.api_client.get(reverse("meal_plan"), {"client_id": self.patient.id})

@@ -29,6 +29,7 @@ class Biomarker(models.Model):
     range_max = models.FloatField(help_text="Normal range upper bound")
     optimal_min = models.FloatField(null=True, blank=True, help_text="Optimal range lower bound")
     optimal_max = models.FloatField(null=True, blank=True, help_text="Optimal range upper bound")
+    average_value = models.FloatField(null=True, blank=True, help_text="Average value calculated from test data")
     unit = models.CharField(max_length=50)
 
     def __str__(self):
