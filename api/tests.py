@@ -529,7 +529,7 @@ class ApiSmokeTests(TestCase):
 		response = self.api_client.get(reverse("generate_mealPlan", args=[self.patient.id]))
 
 		self.assertEqual(response.status_code, 200)
-        self.assertIn(str(self.patient), response.data["message"])
+		self.assertIn(str(self.patient), response.data["message"])
 
 	def test_meal_plan_returns_results_for_client(self):
 		response = self.api_client.get(reverse("meal_plan"), {"client_id": self.patient.id})
@@ -897,6 +897,14 @@ class ApiSmokeTests(TestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(len(response.data["results"]), 1)
 		self.assertEqual(response.data["results"][0]["biomarker_name"], self.biomarker.name)
+		self.assertEqual(response.data["results"][0]["description"], self.biomarker.description)
+
+		# Verify that the nested "data" JSONField results are successfully joined/augmented
+		self.assertIn("data", response.data)
+		self.assertIn("result", response.data["data"])
+		self.assertEqual(len(response.data["data"]["result"]), 1)
+		self.assertEqual(response.data["data"]["result"][0]["biomarker_name"], "Glucose")
+		self.assertEqual(response.data["data"]["result"][0]["description"], "Blood sugar")
 
 	def test_client_dashboard_returns_summary(self):
 		response = self.api_client.get(reverse("client_dashboard"), {"client_id": self.patient.id})

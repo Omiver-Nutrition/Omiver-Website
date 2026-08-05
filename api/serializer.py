@@ -606,6 +606,7 @@ class BiomarkerSerializer(serializers.ModelSerializer):
 
 class BiomarkerResultSerializer(serializers.ModelSerializer):
     biomarker_name = serializers.CharField(source="biomarker.name", read_only=True)
+    description = serializers.CharField(source="biomarker.description", read_only=True)
     unit = serializers.CharField(source="biomarker.unit", read_only=True)
     category = serializers.CharField(source="biomarker.category", read_only=True)
     normal_range = serializers.SerializerMethodField()
@@ -613,7 +614,7 @@ class BiomarkerResultSerializer(serializers.ModelSerializer):
     class Meta:
         model = BiomarkerResult
         fields = [
-            "id", "biomarker", "biomarker_name", "category",
+            "id", "biomarker", "biomarker_name", "description", "category",
             "value", "unit", "status", "normal_range",
         ]
 
@@ -634,10 +635,49 @@ class BiomarkerTestSerializer(serializers.ModelSerializer):
 class BiomarkerTestDetailSerializer(serializers.ModelSerializer):
     """Detail serializer with nested results."""
     results = BiomarkerResultSerializer(many=True, read_only=True)
+    kit_name = serializers.SerializerMethodField()
+    barcode_number = serializers.SerializerMethodField()
+    data = serializers.SerializerMethodField()
 
     class Meta:
         model = BiomarkerTest
-        fields = ["id", "client", "recorded_at", "results", "created_at"]
+        fields = ["id", "client", "recorded_at", "results", "created_at", "kit_name", "barcode_number", "data"]
+
+    def get_kit_name(self, obj):
+        if obj.barcode_assignment and obj.barcode_assignment.test_kit:
+            return obj.barcode_assignment.test_kit.name
+        return None
+
+    def get_barcode_number(self, obj):
+        if obj.barcode_assignment:
+            return obj.barcode_assignment.barcode_number
+        return None
+
+    def get_data(self, obj):
+        if not obj.data or "result" not in obj.data:
+            return obj.data
+        
+        # Extract biomarker IDs from the raw JSON result
+        result_list = obj.data["result"]
+        biomarker_ids = [r["ionIdx"] for r in result_list if "ionIdx" in r]
+        
+        # Query Biomarkers
+        biomarkers = {
+            bm.id: {"name": bm.name, "description": bm.description}
+            for bm in Biomarker.objects.filter(id__in=biomarker_ids)
+        }
+        
+        # Augment raw JSON result with name and description
+        augmented_result = []
+        for r in result_list:
+            item = r.copy()
+            bm_id = r.get("ionIdx")
+            if bm_id in biomarkers:
+                item["biomarker_name"] = biomarkers[bm_id]["name"]
+                item["description"] = biomarkers[bm_id]["description"]
+            augmented_result.append(item)
+            
+        return {"result": augmented_result}
 
 
 class ClientPaymentHistorySerializer(serializers.ModelSerializer):
