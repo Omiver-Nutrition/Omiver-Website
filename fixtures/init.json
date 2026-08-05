@@ -11,35 +11,5 @@
       "created_at": "2024-06-01T00:00:00Z",
       "updated_at": "2024-06-01T00:00:00Z"
     }
-  },
-  {
-    "model": "core.kitbarcodeassignment",
-    "pk": 1,
-    "fields": {
-      "test_kit": 1,
-      "barcode_number": "21191290",
-      "created_at": "2024-06-02T00:00:00Z",
-      "updated_at": "2024-06-02T00:00:00Z"
-    }
-  },
-  {
-    "model": "core.kitbarcodeassignment",
-    "pk": 2,
-    "fields": {
-      "test_kit": 1,
-      "barcode_number": "999123",
-      "created_at": "2024-06-02T00:00:00Z",
-      "updated_at": "2024-06-02T00:00:00Z"
-    }
-  },
-  {
-    "model": "core.kitbarcodeassignment",
-    "pk": 3,
-    "fields": {
-      "test_kit": 1,
-      "barcode_number": "999124",
-      "created_at": "2024-06-02T00:00:00Z",
-      "updated_at": "2024-06-02T00:00:00Z"
-    }
   }
 ]
