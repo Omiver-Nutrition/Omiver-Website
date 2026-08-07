@@ -599,14 +599,15 @@ class BiomarkerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Biomarker
         fields = [
-            "id", "name", "description", "category",
+            "id", "name", "category",
             "range_min", "range_max", "optimal_min", "optimal_max", "unit",
+            "additional_information",
         ]
 
 
 class BiomarkerResultSerializer(serializers.ModelSerializer):
     biomarker_name = serializers.CharField(source="biomarker.name", read_only=True)
-    description = serializers.CharField(source="biomarker.description", read_only=True)
+    additional_information = serializers.JSONField(source="biomarker.additional_information", read_only=True)
     unit = serializers.CharField(source="biomarker.unit", read_only=True)
     category = serializers.CharField(source="biomarker.category", read_only=True)
     normal_range = serializers.SerializerMethodField()
@@ -614,7 +615,7 @@ class BiomarkerResultSerializer(serializers.ModelSerializer):
     class Meta:
         model = BiomarkerResult
         fields = [
-            "id", "biomarker", "biomarker_name", "description", "category",
+            "id", "biomarker", "biomarker_name", "additional_information", "category",
             "value", "unit", "status", "normal_range",
         ]
 
@@ -665,22 +666,22 @@ class BiomarkerTestDetailSerializer(serializers.ModelSerializer):
         
         # Extract biomarker IDs from the raw JSON result
         result_list = obj.data["result"]
-        biomarker_ids = [r["ionIdx"] for r in result_list if "ionIdx" in r]
+        biomarker_ids = [r["biomarker"] for r in result_list if "biomarker" in r]
         
         # Query Biomarkers
         biomarkers = {
-            bm.id: {"name": bm.name, "description": bm.description}
+            bm.id: {"name": bm.name, "additional_information": bm.additional_information}
             for bm in Biomarker.objects.filter(id__in=biomarker_ids)
         }
         
-        # Augment raw JSON result with name and description
+        # Augment raw JSON result with name and additional_information
         augmented_result = []
         for r in result_list:
             item = r.copy()
-            bm_id = r.get("ionIdx")
+            bm_id = r.get("biomarker")
             if bm_id in biomarkers:
                 item["biomarker_name"] = biomarkers[bm_id]["name"]
-                item["description"] = biomarkers[bm_id]["description"]
+                item["additional_information"] = biomarkers[bm_id]["additional_information"]
             augmented_result.append(item)
             
         return {"result": augmented_result}

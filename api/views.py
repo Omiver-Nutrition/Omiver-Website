@@ -1976,15 +1976,15 @@ def biomarker_test_detail(request, pk):
             .get(pk=pk)
         )
         for i in range(len(test.data.get("result", []))):
-            ion_idx = test.data["result"][i].get("ionIdx")
+            biomarker_id = test.data["result"][i].get("biomarker")
             value = test.data["result"][i].get("value")
-            if ion_idx is not None and value is not None:
+            if biomarker_id is not None and value is not None:
                 try:
-                    bm = Biomarker.objects.get(pk=ion_idx)
+                    bm = Biomarker.objects.get(pk=biomarker_id)
                     status = compute_biomarker_status(bm, value)
                     test.data["result"][i]["status"] = status
                     test.data["result"][i]["name"] = bm.name
-                    test.data["result"][i]["description"] = bm.description
+                    test.data["result"][i]["additional_information"] = bm.additional_information
                 except Biomarker.DoesNotExist:
                     test.data["result"][i]["status"] = "UNKNOWN"
     except BiomarkerTest.DoesNotExist:
@@ -2063,15 +2063,15 @@ def client_dashboard(request):
 
     if latest_test and latest_test.data and "result" in latest_test.data:
         grouped = defaultdict(list)
-        biomarker_ids = [r["ionIdx"] for r in latest_test.data["result"] if "ionIdx" in r]
+        biomarker_ids = [r["biomarker"] for r in latest_test.data["result"] if "biomarker" in r]
         biomarkers = {bm.id: bm for bm in Biomarker.objects.filter(id__in=biomarker_ids)}
 
         for r in latest_test.data["result"]:
-            ion_idx = r.get("ionIdx")
+            biomarker_id = r.get("biomarker")
             value = r.get("value")
-            if ion_idx is None or value is None:
+            if biomarker_id is None or value is None:
                 continue
-            bm = biomarkers.get(ion_idx)
+            bm = biomarkers.get(biomarker_id)
             if not bm:
                 continue
 

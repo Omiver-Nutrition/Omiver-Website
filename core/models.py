@@ -23,7 +23,6 @@ class Biomarker(models.Model):
 
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=255, unique=True, db_index=True)
-    description = models.TextField(blank=True)
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default="OTHER")
     range_min = models.FloatField(help_text="Normal range lower bound")
     range_max = models.FloatField(help_text="Normal range upper bound")
@@ -31,6 +30,7 @@ class Biomarker(models.Model):
     optimal_max = models.FloatField(null=True, blank=True, help_text="Optimal range upper bound")
     average_value = models.FloatField(null=True, blank=True, help_text="Average value calculated from test data")
     unit = models.CharField(max_length=50)
+    additional_information = models.JSONField(null=True, blank=True, help_text="Additional metadata and statistics as JSON")
 
     def __str__(self):
         return f"{self.name} ({self.unit})"

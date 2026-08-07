@@ -167,7 +167,7 @@ class ApiSmokeTests(TestCase):
 
 		self.biomarker = Biomarker.objects.create(
 			name="Glucose",
-			description="Blood sugar",
+			additional_information={"note": "Blood sugar"},
 			category="METABOLIC",
 			range_min=70,
 			range_max=99,
@@ -178,7 +178,7 @@ class ApiSmokeTests(TestCase):
 		self.biomarker_test = BiomarkerTest.objects.create(
 			client=self.patient,
 			recorded_at=timezone.now() - timedelta(days=1),
-            data={"result": [{"ionIdx": self.biomarker.id, "value": 85}]}
+            data={"result": [{"biomarker": self.biomarker.id, "value": 85}]}
 		)
 		self.biomarker_result = BiomarkerResult.objects.create(
 			test=self.biomarker_test,
@@ -897,14 +897,14 @@ class ApiSmokeTests(TestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(len(response.data["results"]), 1)
 		self.assertEqual(response.data["results"][0]["biomarker_name"], self.biomarker.name)
-		self.assertEqual(response.data["results"][0]["description"], self.biomarker.description)
+		self.assertEqual(response.data["results"][0]["additional_information"], self.biomarker.additional_information)
 
 		# Verify that the nested "data" JSONField results are successfully joined/augmented
 		self.assertIn("data", response.data)
 		self.assertIn("result", response.data["data"])
 		self.assertEqual(len(response.data["data"]["result"]), 1)
 		self.assertEqual(response.data["data"]["result"][0]["biomarker_name"], "Glucose")
-		self.assertEqual(response.data["data"]["result"][0]["description"], "Blood sugar")
+		self.assertEqual(response.data["data"]["result"][0]["additional_information"], {"note": "Blood sugar"})
 
 	def test_client_dashboard_returns_summary(self):
 		response = self.api_client.get(reverse("client_dashboard"), {"client_id": self.patient.id})
