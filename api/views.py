@@ -1953,6 +1953,18 @@ def biomarker_test_detail(request, pk):
             .prefetch_related("results__biomarker")
             .get(pk=pk)
         )
+        for i in range(len(test.data.get("result", []))):
+            ion_idx = test.data["result"][i].get("ionIdx")
+            value = test.data["result"][i].get("value")
+            if ion_idx is not None and value is not None:
+                try:
+                    bm = Biomarker.objects.get(pk=ion_idx)
+                    status = compute_biomarker_status(bm, value)
+                    test.data["result"][i]["status"] = status
+                    test.data["result"][i]["name"] = bm.name
+                    test.data["result"][i]["description"] = bm.description
+                except Biomarker.DoesNotExist:
+                    test.data["result"][i]["status"] = "UNKNOWN"
     except BiomarkerTest.DoesNotExist:
         return Response({"error": "Test not found"}, status.HTTP_404_NOT_FOUND)
     return Response(BiomarkerTestDetailSerializer(test).data)
