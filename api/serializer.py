@@ -623,6 +623,12 @@ class BiomarkerResultSerializer(serializers.ModelSerializer):
         return f"Normal: {bm.range_min}-{bm.range_max}"
 
 
+class BiomarkerReportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BiomarkerReport
+        fields = ["primary_id", "report", "created_at", "client", "test_ids"]
+
+
 class BiomarkerTestSerializer(serializers.ModelSerializer):
     """Lightweight list serializer for biomarker tests."""
     result_count = serializers.IntegerField(source="results.count", read_only=True)

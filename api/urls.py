@@ -51,6 +51,7 @@ urlpatterns = [
     # biomarkers & dashboard
     path("biomarkers", views.list_biomarkers, name="list_biomarkers"),
     path("biomarker-tests", views.list_biomarker_tests, name="list_biomarker_tests"),
+    path("biomarker-reports", views.list_biomarker_reports, name="list_biomarker_reports"),
     path("biomarker-tests/<int:pk>", views.biomarker_test_detail, name="biomarker_test_detail"),
     path("dashboard", views.client_dashboard, name="client_dashboard"),
     path("payments", views.client_payments, name="client_payments"),

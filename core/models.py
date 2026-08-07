@@ -40,7 +40,7 @@ class BiomarkerTest(models.Model):
     """A test session — groups multiple biomarker results recorded at the same time."""
 
     id = models.AutoField(primary_key=True)
-    client = models.ForeignKey("Client", on_delete=models.CASCADE, related_name="biomarker_tests")
+    client = models.ForeignKey("Client", on_delete=models.SET_NULL, null=True, blank=True, related_name="biomarker_tests")
     barcode_assignment = models.ForeignKey("KitBarcodeAssignment", on_delete=models.SET_NULL, null=True, blank=True, related_name="biomarker_tests")
     data = models.JSONField(blank=True, null=True, help_text="Legacy raw data")
     recorded_at = models.DateTimeField()
@@ -48,7 +48,8 @@ class BiomarkerTest(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"Test for {self.client} on {self.recorded_at}"
+        client_name = self.client if self.client else "Unknown"
+        return f"Test for {client_name} on {self.recorded_at}"
 
 
 class BiomarkerResult(models.Model):
@@ -639,6 +640,27 @@ class Recommendation(models.Model):
 
     def __str__(self):
         return f"Recommendation ({self.status}) for {self.client}"
+
+
+class BiomarkerReport(models.Model):
+    """A textual report spanning one or more biomarker tests."""
+
+    primary_id = models.AutoField(primary_key=True)
+    report = models.TextField(help_text="Textual report content")
+    created_at = models.DateTimeField(auto_now_add=True)
+    client = models.ForeignKey(
+        "Client", 
+        on_delete=models.CASCADE, 
+        related_name="biomarker_reports"
+    )
+    test_ids = models.JSONField(
+        default=list, 
+        blank=True, 
+        help_text="List of BiomarkerTest IDs in chronological order"
+    )
+
+    def __str__(self):
+        return f"Report {self.primary_id} for {self.client} ({self.created_at.date()})"
 
 
 

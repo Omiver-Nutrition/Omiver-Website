@@ -8,7 +8,7 @@ from django.utils.html import format_html
 from .models import (
     Client, TestKit, Order, KitBarcodeAssignment, DeliveryEvent, ShippingInfo, PaymentInfo, BillingAddress, Purchase, ShippingAddress,
     DietLog, ExerciseLog,
-    Biomarker, BiomarkerTest, BiomarkerResult, KitCollection,
+    Biomarker, BiomarkerTest, BiomarkerResult, KitCollection, BiomarkerReport,
 )
 
 
@@ -437,5 +437,12 @@ class KitCollectionAdmin(admin.ModelAdmin):
     list_display = ("kit_barcode", "user", "order", "status", "collected_at", "created_at")
     list_filter = ("status",)
     search_fields = ("kit_barcode", "user__email", "order__order_number")
+
+
+@admin.register(BiomarkerReport)
+class BiomarkerReportAdmin(admin.ModelAdmin):
+    list_display = ("primary_id", "client", "created_at")
+    list_filter = ("created_at",)
+    search_fields = ("client__email", "client__first_name", "client__last_name", "report")
 
 

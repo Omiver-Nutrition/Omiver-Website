@@ -34,6 +34,7 @@ from .serializer import (
     OrderCreateSerializer, DeliveryEventSerializer,
     CheckoutRequestSerializer, PurchaseDetailSerializer, PaymentInfoSerializer,
     BiomarkerSerializer, BiomarkerResultSerializer,
+    BiomarkerReportSerializer,
     BiomarkerTestSerializer, BiomarkerTestDetailSerializer,
     ClientPaymentHistorySerializer, ProviderPatientSerializer,
     ShippingAddressSerializer, RecommendationSerializer, KitCollectionSerializer,
@@ -44,7 +45,7 @@ from core.models import (
     KitCollection, DietLog, ExerciseLog,
     PaymentInfo, BillingAddress, Purchase, ShippingInfo,
     ShippingAddress,
-    Biomarker, BiomarkerTest, BiomarkerResult,
+    Biomarker, BiomarkerTest, BiomarkerResult, BiomarkerReport,
     Membership, Recommendation, KitCollection,
 )
 from .barcode_manager import (
@@ -1936,6 +1937,27 @@ def list_biomarker_tests(request):
         return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
     tests = BiomarkerTest.objects.filter(client_id=client_id).order_by("-recorded_at")
     return Response(BiomarkerTestSerializer(tests, many=True).data)
+
+
+@extend_schema(
+    summary="List biomarker reports for a client",
+    description="Return all biomarker reports for a client, newest first.",
+    parameters=[
+        OpenApiParameter(name="client_id", type=int, required=True, description="Client ID"),
+    ],
+    responses={200: BiomarkerReportSerializer(many=True)},
+    tags=["Biomarkers"],
+)
+@api_view(["GET"])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def list_biomarker_reports(request):
+    """List all biomarker reports for a client, newest first."""
+    client_id = request.GET.get("client_id")
+    if not client_id:
+        return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
+    reports = BiomarkerReport.objects.filter(client_id=client_id).order_by("-created_at")
+    return Response(BiomarkerReportSerializer(reports, many=True).data)
 
 
 @extend_schema(
