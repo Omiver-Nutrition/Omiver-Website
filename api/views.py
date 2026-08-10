@@ -2505,6 +2505,266 @@ def generate_recommendation_draft_api(request):
     return Response(RecommendationSerializer(rec).data)
 
 
+@extend_schema(
+    summary="Import biomarker CSV for a client",
+    description=(
+        "Upload a TASSO/IONS biomarker CSV for a specific client. "
+        "Creates BiomarkerTests and BiomarkerResults, and links them through KitBarcodeAssignment."
+    ),
+    tags=["Biomarkers"],
+)
+@api_view(["POST"])
+def import_biomarker_csv(request, client_id):
+    """Upload a TASSO/IONS biomarker CSV for a specific client."""
+    import csv
+    import io
+    import re
+    from datetime import datetime
+    from django.utils.dateparse import parse_datetime
+    from django.utils import timezone
+    from django.db import transaction
+    from api.ai_utils import generate_ai_recommendation_draft
+
+    csv_file = request.FILES.get("csv_file")
+    if not csv_file:
+        return Response({"error": "csv_file is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        client = Client.objects.get(pk=client_id)
+    except Client.DoesNotExist:
+        return Response({"error": "Client not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        file_data = csv_file.read().decode("utf-8")
+        csv_reader = csv.DictReader(io.StringIO(file_data))
+        headers = [h.strip().lower() for h in csv_reader.fieldnames] if csv_reader.fieldnames else []
+
+        required_long_headers = ["ionidx", "ionmz", "iontopname"]
+        is_long_format = all(h in headers for h in required_long_headers)
+        is_wide_format = all(h in headers for h in ["barcode_number", "biomarker_name", "value", "recorded_at"])
+
+        if not is_long_format and not is_wide_format:
+            return Response(
+                {
+                    "error": "Invalid CSV format. Expected IONS long format or biomarker CSV with barcode_number, biomarker_name, value, recorded_at.",
+                    "found_headers": headers,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        grouped_data = {}
+        barcodes_to_finalize = set()
+        tests_to_trigger = []
+
+        if is_long_format:
+            import_time = timezone.now()
+            barcode_pattern = re.compile(r"^(?:Sample_[A-Za-z]+_)?(\d+)$")
+
+            for row_idx, row in enumerate(csv_reader, start=1):
+                row_clean = {k.strip(): v.strip() if v else "" for k, v in row.items() if k}
+                biomarker_name = row_clean.get("ionTopName") or row_clean.get("ionTopFormula")
+                if not biomarker_name:
+                    continue
+
+                for header, value in row_clean.items():
+                    if not header or not value:
+                        continue
+                    barcode_match = barcode_pattern.match(header.strip())
+                    if not barcode_match:
+                        continue
+                    barcode = barcode_match.group(1)
+
+                    try:
+                        assignment = KitBarcodeAssignment.objects.select_related("client").get(barcode_number=barcode)
+                    except KitBarcodeAssignment.DoesNotExist:
+                        return Response(
+                            {"error": f"Row {row_idx}: Barcode '{barcode}' not found."},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+
+                    try:
+                        value_float = float(value)
+                    except ValueError:
+                        continue
+
+                    client_obj = assignment.client
+                    barcodes_to_finalize.add(barcode)
+                    key = (client_obj.id, import_time)
+                    if key not in grouped_data:
+                        grouped_data[key] = {
+                            "client": client_obj,
+                            "recorded_at": import_time,
+                            "results": [],
+                        }
+                    grouped_data[key]["results"].append((biomarker_name, value_float))
+        else:
+            for row_idx, row in enumerate(csv_reader, start=1):
+                row_clean = {k.strip().lower(): v.strip() if v else "" for k, v in row.items() if k}
+                barcode = row_clean.get("barcode_number")
+                biomarker_name = row_clean.get("biomarker_name")
+                value_str = row_clean.get("value")
+                recorded_at_str = row_clean.get("recorded_at")
+
+                if not barcode or not biomarker_name or not value_str or not recorded_at_str:
+                    continue
+
+                try:
+                    assignment = KitBarcodeAssignment.objects.select_related("client").get(barcode_number=barcode)
+                except KitBarcodeAssignment.DoesNotExist:
+                    return Response(
+                        {"error": f"Row {row_idx}: Barcode '{barcode}' not found in Omiver system."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                client_obj = assignment.client
+                if client_obj:
+                    barcodes_to_finalize.add(barcode)
+
+                recorded_at = parse_datetime(recorded_at_str)
+                if not recorded_at:
+                    return Response(
+                        {"error": f"Row {row_idx}: Invalid date format '{recorded_at_str}'."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                try:
+                    value = float(value_str)
+                except ValueError:
+                    return Response(
+                        {"error": f"Row {row_idx}: Invalid numeric value '{value_str}'."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                key = (client_obj.id, recorded_at)
+                if key not in grouped_data:
+                    grouped_data[key] = {
+                        "client": client_obj,
+                        "recorded_at": recorded_at,
+                        "results": [],
+                    }
+                grouped_data[key]["results"].append((biomarker_name, value))
+
+        tests_created = 0
+        results_created = 0
+
+        # Build biomarker lookup
+        biomarker_id_map = {bm.name: bm.id for bm in Biomarker.objects.all()}
+
+        for barcode, info in grouped_data.items():
+            client_obj = info["client"]
+            recorded_at = info["recorded_at"]
+            results_list = info["results"]
+
+            try:
+                assignment = KitBarcodeAssignment.objects.select_related("client", "test_kit").get(barcode_number=barcode)
+            except KitBarcodeAssignment.DoesNotExist:
+                continue
+
+            with transaction.atomic():
+                test, created = BiomarkerTest.objects.get_or_create(
+                    client=client_obj,
+                    barcode_assignment=assignment,
+                    recorded_at=recorded_at,
+                )
+                if created:
+                    tests_created += 1
+
+                # Store results data as JSON [{biomarker_id, value}, ...]
+                results_data = []
+                for bm_name, val in results_list:
+                    bm_id = biomarker_id_map.get(bm_name)
+                    if bm_id is None:
+                        bm = Biomarker.objects.filter(name__iexact=bm_name).first()
+                        if not bm:
+                            bm = Biomarker.objects.create(
+                                name=bm_name,
+                                category="OTHER",
+                                range_min=0.0,
+                                range_max=100.0,
+                                optimal_min=20.0,
+                                optimal_max=80.0,
+                                unit="units",
+                            )
+                        biomarker_id_map[bm_name] = bm.id
+                        bm_id = bm.id
+
+                    results_data.append({"biomarker_id": bm_id, "value": val})
+
+                test.data = results_data
+                test.save(update_fields=["data"])
+
+                for item in results_data:
+                    try:
+                        bm = Biomarker.objects.get(pk=item["biomarker_id"])
+                    except Biomarker.DoesNotExist:
+                        continue
+
+                    value = item["value"]
+                    status = "NORMAL"
+                    if bm.optimal_min is not None and bm.optimal_max is not None:
+                        if bm.optimal_min <= value <= bm.optimal_max:
+                            status = "OPTIMAL"
+                        elif bm.range_min <= value <= bm.range_max:
+                            status = "NORMAL"
+                        elif value < bm.range_min:
+                            status = "LOW"
+                        else:
+                            status = "HIGH"
+                    else:
+                        if bm.range_min <= value <= bm.range_max:
+                            status = "NORMAL"
+                        elif value < bm.range_min:
+                            status = "LOW"
+                        else:
+                            status = "HIGH"
+
+                    BiomarkerResult.objects.update_or_create(
+                        test=test,
+                        biomarker=bm,
+                        defaults={"value": val, "status": status},
+                    )
+                    results_created += 1
+
+                tests_to_trigger.append(test.id)
+
+        for barcode in barcodes_to_finalize:
+            assignment = KitBarcodeAssignment.objects.filter(barcode_number=barcode).first()
+            if assignment:
+                order = getattr(assignment, "order", None)
+                collection, _ = KitCollection.objects.get_or_create(
+                    kit_barcode=barcode,
+                    defaults={
+                        "user": assignment.client,
+                        "order": order,
+                        "status": "FINISHED",
+                    },
+                )
+                if collection.status != "FINISHED":
+                    collection.status = "FINISHED"
+                    collection.save(update_fields=["status", "updated_at"])
+
+                if order:
+                    order.status = "FINISHED"
+                    order.save(update_fields=["status", "updated_at"])
+
+        triggered_count = 0
+        for tid in tests_to_trigger:
+            rec = generate_ai_recommendation_draft(tid)
+            if rec:
+                triggered_count += 1
+
+        return Response(
+            {
+                "tests_created": tests_created,
+                "results_created": results_created,
+                "ai_recommendations_triggered": triggered_count,
+            },
+            status=status.HTTP_200_OK,
+        )
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
 
 
 

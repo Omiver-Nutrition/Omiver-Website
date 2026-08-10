@@ -1086,7 +1086,7 @@ class ApiSmokeTests(TestCase):
 		self.api_client.force_login(self.web_user)
 
 		# Post to admin import view
-		import_url = reverse("admin:core_kitbarcodeassignment_import_csv")
+		import_url = reverse("admin:core_biomarkertest_import_csv")
 		response = self.api_client.post(
 			import_url,
 			{"csv_file": csv_file},

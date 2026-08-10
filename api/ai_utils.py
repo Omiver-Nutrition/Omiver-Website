@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import requests
+from datetime import date
 from django.utils import timezone
 from core.models import Client, BiomarkerTest, BiomarkerResult, Recommendation
 
@@ -39,9 +40,14 @@ def generate_ai_recommendation_draft(test_id):
             abnormal_markers.append(marker_info)
 
     # 2. Gather client health profile
+    dob = client.date_of_birth
+    if isinstance(dob, date):
+        age = (timezone.now().date() - dob).days // 365
+    else:
+        age = "Unknown"
     profile = {
         "email": client.email,
-        "age": (timezone.now().date() - client.date_of_birth).days // 365 if client.date_of_birth else "Unknown",
+        "age": age,
         "gender": client.gender or "Unknown",
         "height": client.height,
         "weight": client.weight,
