@@ -12,6 +12,7 @@ dependencies = [
     "django-cors-headers>=4.9.0",
     "djangorestframework==3.16.1",
     "gunicorn==21.2.0",
+    "cryptography>=45.0.0",
     "pillow==11.3.0",
     "psycopg2-binary==2.9.10",
     "python-dotenv==1.1.1",
@@ -19,3 +20,6 @@ dependencies = [
     "drf-spectacular>=0.28.0",
     "stripe>=15.0.1",
 ]
+
+[dependency-groups]
+dev = []

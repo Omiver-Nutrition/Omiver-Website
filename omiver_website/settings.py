@@ -32,7 +32,9 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DJANGO_DEBUG", "False").upper()=="TRUE"
 
-ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS").split(",")
+ALLOWED_HOSTS = [
+    host for host in os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",") if host
+]
 
 CSRF_TRUSTED_ORIGINS = ["https://*.127.0.0.1","https://www.omiver.me", "http://localhost:3000", "http://localhost:5173"]
 

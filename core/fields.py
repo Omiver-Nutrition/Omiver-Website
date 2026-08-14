@@ -3,7 +3,7 @@ from datetime import date
 from core.encryption import encrypt, decrypt
 
 class EncryptedCharField(models.CharField):
-    description = "An encrypted character field using AES-256 via OpenSSL"
+    description = "An encrypted character field using AES-256-CBC"
 
     def get_prep_value(self, value):
         value = super().get_prep_value(value)
@@ -28,7 +28,7 @@ class EncryptedCharField(models.CharField):
 
 
 class EncryptedTextField(models.TextField):
-    description = "An encrypted text field using AES-256 via OpenSSL"
+    description = "An encrypted text field using AES-256-CBC"
 
     def get_prep_value(self, value):
         value = super().get_prep_value(value)
@@ -49,7 +49,7 @@ class EncryptedTextField(models.TextField):
 
 
 class EncryptedIntegerField(models.TextField):
-    description = "An encrypted integer field using AES-256 via OpenSSL"
+    description = "An encrypted integer field using AES-256-CBC"
 
     def get_prep_value(self, value):
         value = super().get_prep_value(value)
@@ -76,7 +76,7 @@ class EncryptedIntegerField(models.TextField):
 
 
 class EncryptedFloatField(models.TextField):
-    description = "An encrypted float field using AES-256 via OpenSSL"
+    description = "An encrypted float field using AES-256-CBC"
 
     def get_prep_value(self, value):
         value = super().get_prep_value(value)
@@ -103,7 +103,7 @@ class EncryptedFloatField(models.TextField):
 
 
 class EncryptedDateField(models.TextField):
-    description = "An encrypted date field using AES-256 via OpenSSL"
+    description = "An encrypted date field using AES-256-CBC"
 
     def get_prep_value(self, value):
         value = super().get_prep_value(value)

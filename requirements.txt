@@ -6,6 +6,7 @@ sqlparse==0.5.3
 psycopg2-binary==2.9.10
 django-browser-reload==1.21.0
 django-components==0.141.5
+cryptography>=45.0.0
 Pillow==11.3.0
 python-dotenv==1.1.1
 django-cors-headers
