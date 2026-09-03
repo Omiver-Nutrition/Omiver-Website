@@ -632,11 +632,27 @@ class BiomarkerReportSerializer(serializers.ModelSerializer):
 
 class BiomarkerTestSerializer(serializers.ModelSerializer):
     """Lightweight list serializer for biomarker tests."""
-    result_count = serializers.IntegerField(source="results.count", read_only=True)
+    # 1. Change this to a SerializerMethodField
+    result_count = serializers.SerializerMethodField()
 
     class Meta:
         model = BiomarkerTest
+        # You can keep "data" out of fields if you don't want to expose the raw array
         fields = ["id", "client", "recorded_at", "result_count", "created_at"]
+
+    # 2. Add the method to calculate the length
+    def get_result_count(self, obj):
+        # 1. Fallback to an empty dict if obj.data is completely null
+        data_dict = obj.data or {}
+        
+        # 2. Extract the 'result' key, fallback to an empty list if it doesn't exist
+        results_array = data_dict.get('result', [])
+        
+        # 3. Check if it's a valid list and return its length
+        if isinstance(results_array, list):
+            return len(results_array)
+        
+        return 0
 
 
 class BiomarkerTestDetailSerializer(serializers.ModelSerializer):
