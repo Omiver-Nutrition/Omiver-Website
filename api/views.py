@@ -56,6 +56,10 @@ from .barcode_manager import (
     BarcodeMismatchError,
     OrderNotFoundError,
 )
+from .pdf_generator import (
+    generate_recommendation_pdf,
+    generate_biomarker_report_pdf,
+)
 from .order_manager import (
     OrderManager,
     OrderIntakeError,
@@ -2503,6 +2507,403 @@ def generate_recommendation_draft_api(request):
         return Response({"error": "Failed to generate recommendations"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
     return Response(RecommendationSerializer(rec).data)
+
+
+@extend_schema(
+    summary="Download recommendation plan as PDF",
+    description="Generates and downloads a medical-grade PDF report of the personalized recommendation plan.",
+    parameters=[
+        OpenApiParameter(name="inline", type=bool, required=False, description="Whether to display inline in browser instead of attachment download"),
+    ],
+    responses={
+        200: inline_serializer(
+            name="PdfBinaryResponse",
+            fields={"content": serializers.CharField(help_text="Binary PDF stream")}
+        ),
+        404: inline_serializer(
+            name="NotFoundResponse",
+            fields={"error": serializers.CharField()}
+        )
+    },
+    tags=["Recommendations"],
+)
+@api_view(["GET"])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def download_recommendation_pdf(request, pk):
+    try:
+        rec = Recommendation.objects.select_related("client", "biomarker_test", "approved_by").get(pk=pk)
+    except Recommendation.DoesNotExist:
+        return Response({"error": "Recommendation not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    pdf_bytes = generate_recommendation_pdf(rec)
+    disposition = "inline" if request.GET.get("inline", "").lower() in ["1", "true"] else "attachment"
+    filename = f"omiver-recommendation-{rec.id}.pdf"
+    
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+    response["Access-Control-Expose-Headers"] = "Content-Disposition"
+    return response
+
+
+@extend_schema(
+    summary="Download biomarker delta report as PDF",
+    description="Generates and downloads a formatted PDF report of the biomarker report.",
+    parameters=[
+        OpenApiParameter(name="inline", type=bool, required=False, description="Whether to display inline in browser instead of attachment download"),
+    ],
+    responses={
+        200: inline_serializer(
+            name="PdfReportBinaryResponse",
+            fields={"content": serializers.CharField(help_text="Binary PDF stream")}
+        ),
+        404: inline_serializer(
+            name="NotFoundReportResponse",
+            fields={"error": serializers.CharField()}
+        )
+    },
+    tags=["Biomarkers"],
+)
+@api_view(["GET"])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def download_biomarker_report_pdf(request, pk):
+    try:
+        report = BiomarkerReport.objects.select_related("client").get(pk=pk)
+    except BiomarkerReport.DoesNotExist:
+        return Response({"error": "BiomarkerReport not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    pdf_bytes = generate_biomarker_report_pdf(report)
+    disposition = "inline" if request.GET.get("inline", "").lower() in ["1", "true"] else "attachment"
+    filename = f"omiver-biomarker-report-{report.primary_id}.pdf"
+    
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+    response["Access-Control-Expose-Headers"] = "Content-Disposition"
+    return response
+
+
+# ─────────────────────────────────────────────────────────────
+# Step-by-step Sample Collection Backend APIs
+# ─────────────────────────────────────────────────────────────
+
+def _update_kit_collection_step(client_id, barcode_number=None, order_id=None, step_key=None, step_data=None):
+    client = Client.objects.filter(pk=client_id).first()
+    if not client:
+        return None, "Client not found"
+
+    order = None
+    if order_id:
+        order = Order.objects.filter(pk=order_id).first()
+
+    kc = None
+    if order:
+        kc = KitCollection.objects.filter(order=order).first()
+    if not kc and barcode_number:
+        kc = KitCollection.objects.filter(kit_barcode=barcode_number).first()
+    if not kc:
+        kc = KitCollection.objects.filter(user=client).order_by("-created_at").first()
+
+    if not kc:
+        effective_barcode = barcode_number or (order.order_number if order else f"KIT-{client_id}")
+        kc = KitCollection.objects.create(
+            user=client,
+            order=order,
+            kit_barcode=effective_barcode,
+            status="CREATED"
+        )
+
+    if order and not kc.order:
+        kc.order = order
+
+    if barcode_number and kc.kit_barcode != barcode_number:
+        kc.kit_barcode = barcode_number
+
+    current_progress = kc.step_progress or {}
+    if step_key and step_data:
+        current_progress[step_key] = step_data
+        kc.step_progress = current_progress
+
+    kc.save()
+    return kc, None
+
+
+@extend_schema(
+    summary="Collection Step 1: Save & Link Barcode",
+    description="Registers and links barcode to account, saving Step 1 progress.",
+    tags=["KitCollection"],
+)
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def collection_step1_link(request):
+    client_id = request.data.get("client_id")
+    barcode_number = (request.data.get("barcode_number") or "").strip()
+    order_id = request.data.get("order_id")
+
+    if not client_id or not barcode_number:
+        return Response({"error": "client_id and barcode_number are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    if order_id:
+        try:
+            from .barcode_manager import BarcodeManager
+            manager = BarcodeManager()
+            manager.scan_barcode(order_id, barcode_number)
+        except Exception:
+            pass
+
+    from .barcode_manager import BarcodeManager
+    try:
+        assignment, already_linked = BarcodeManager.link_barcode_to_client(barcode_number, client_id)
+        linked_order_id = assignment.order_id or order_id
+        test_kit_name = assignment.test_kit.name if assignment.test_kit else "Test Kit"
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    now_iso = timezone.now().isoformat()
+    step_data = {
+        "completed": True,
+        "barcode": barcode_number,
+        "order_id": linked_order_id,
+        "test_kit_name": test_kit_name,
+        "saved_at": now_iso,
+        "message": "Step 1 saved: Barcode linked to account"
+    }
+
+    kc, err = _update_kit_collection_step(client_id, barcode_number, linked_order_id, "step1", step_data)
+    if err:
+        return Response({"error": err}, status=status.HTTP_404_NOT_FOUND)
+
+    return Response({
+        "success": True,
+        "step": 1,
+        "barcode": barcode_number,
+        "order_id": linked_order_id,
+        "saved_at": now_iso,
+        "message": "✓ Step 1 saved: Barcode registered successfully in Omiver cloud",
+        "step_progress": kc.step_progress,
+    })
+
+
+@extend_schema(
+    summary="Collection Step 2: Confirm & Save Sample Collection",
+    description="Records completion of arm device placement and sample collection.",
+    tags=["KitCollection"],
+)
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def collection_step2_collect(request):
+    client_id = request.data.get("client_id")
+    barcode_number = (request.data.get("barcode_number") or "").strip()
+    order_id = request.data.get("order_id")
+    notes = request.data.get("notes") or ""
+
+    if not client_id or not barcode_number:
+        return Response({"error": "client_id and barcode_number are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    now_dt = timezone.now()
+    now_iso = now_dt.isoformat()
+
+    from .barcode_manager import BarcodeManager
+    manager = BarcodeManager()
+    try:
+        manager.mark_barcode_collected(barcode_number, client_id, now_iso)
+    except Exception:
+        pass
+
+    client = Client.objects.filter(pk=client_id).first()
+    if client:
+        client.collection_finished_at = now_iso
+        client.save()
+
+    step_data = {
+        "completed": True,
+        "collected_at": now_iso,
+        "notes": notes,
+        "saved_at": now_iso,
+        "message": "Step 2 saved: Sample collection recorded"
+    }
+
+    kc, err = _update_kit_collection_step(client_id, barcode_number, order_id, "step2", step_data)
+    if err:
+        return Response({"error": err}, status=status.HTTP_404_NOT_FOUND)
+
+    kc.status = "COLLECTED"
+    kc.collected_at = now_dt
+    kc.save()
+
+    return Response({
+        "success": True,
+        "step": 2,
+        "collected_at": now_iso,
+        "saved_at": now_iso,
+        "message": "✓ Step 2 saved: Sample collection confirmed and timestamped in Omiver cloud",
+        "step_progress": kc.step_progress,
+    })
+
+
+@extend_schema(
+    summary="Collection Step 2 Sub-step: Confirm Specimen Pouch Placement",
+    description="Confirms placement of the sealed specimen pouch in the kit box.",
+    tags=["KitCollection"],
+)
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def collection_step2_pouch(request):
+    client_id = request.data.get("client_id")
+    order_id = request.data.get("order_id")
+
+    if not client_id:
+        return Response({"error": "client_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    now_iso = timezone.now().isoformat()
+    step_data = {
+        "completed": True,
+        "confirmed_at": now_iso,
+        "saved_at": now_iso,
+        "message": "Specimen pouch confirmed in box"
+    }
+
+    kc, err = _update_kit_collection_step(client_id, None, order_id, "step2_pouch", step_data)
+    if err:
+        return Response({"error": err}, status=status.HTTP_404_NOT_FOUND)
+
+    return Response({
+        "success": True,
+        "step": "2_pouch",
+        "saved_at": now_iso,
+        "message": "✓ Pouch confirmation saved in Omiver cloud",
+        "step_progress": kc.step_progress,
+    })
+
+
+@extend_schema(
+    summary="Collection Step 3: Save Packaging & Drop-off Preparation",
+    description="Saves drop-off preparation status (mail envelope sealed and shipping label affixed).",
+    tags=["KitCollection"],
+)
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def collection_step3_prepare(request):
+    client_id = request.data.get("client_id")
+    order_id = request.data.get("order_id")
+
+    if not client_id:
+        return Response({"error": "client_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    now_iso = timezone.now().isoformat()
+    step_data = {
+        "completed": True,
+        "prepared_at": now_iso,
+        "saved_at": now_iso,
+        "message": "Packaging sealed & shipping label affixed"
+    }
+
+    kc, err = _update_kit_collection_step(client_id, None, order_id, "step3", step_data)
+    if err:
+        return Response({"error": err}, status=status.HTTP_404_NOT_FOUND)
+
+    return Response({
+        "success": True,
+        "step": 3,
+        "saved_at": now_iso,
+        "message": "✓ Step 3 saved: Drop-off preparation confirmed in Omiver cloud",
+        "step_progress": kc.step_progress,
+    })
+
+
+@extend_schema(
+    summary="Collection Step 4: Save & Mark Sample as Shipped",
+    description="Updates transit status to SHIPPED and creates delivery tracking milestone.",
+    tags=["KitCollection"],
+)
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def collection_step4_ship(request):
+    client_id = request.data.get("client_id")
+    order_id = request.data.get("order_id")
+
+    if not client_id or not order_id:
+        return Response({"error": "client_id and order_id are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    from .order_manager import OrderManager
+    manager = OrderManager()
+    try:
+        manager.update_order_status(order_id, {
+            "status": "SHIPPED",
+            "title": "Shipped",
+            "description": "Sample dropped off and in transit to laboratory"
+        })
+    except Exception:
+        pass
+
+    now_iso = timezone.now().isoformat()
+    step_data = {
+        "completed": True,
+        "shipped_at": now_iso,
+        "status": "SHIPPED",
+        "saved_at": now_iso,
+        "message": "Sample marked as shipped"
+    }
+
+    kc, err = _update_kit_collection_step(client_id, None, order_id, "step4", step_data)
+    if err:
+        return Response({"error": err}, status=status.HTTP_404_NOT_FOUND)
+
+    kc.status = "SHIPPING"
+    kc.save()
+
+    return Response({
+        "success": True,
+        "step": 4,
+        "status": "SHIPPED",
+        "saved_at": now_iso,
+        "message": "✓ Step 4 saved: Sample marked as shipped & tracking activated",
+        "step_progress": kc.step_progress,
+    })
+
+
+@extend_schema(
+    summary="Get Collection Progress",
+    description="Retrieves step-by-step collection progress, saved timestamps, and state.",
+    tags=["KitCollection"],
+)
+@api_view(["GET"])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def collection_progress(request):
+    client_id = request.GET.get("client_id")
+    order_id = request.GET.get("order_id")
+
+    if not client_id and not order_id:
+        return Response({"error": "client_id or order_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    kc = None
+    if order_id:
+        kc = KitCollection.objects.filter(order_id=order_id).first()
+    if not kc and client_id:
+        kc = KitCollection.objects.filter(user_id=client_id).order_by("-created_at").first()
+
+    if not kc:
+        return Response({
+            "kit_barcode": None,
+            "status": "CREATED",
+            "collected_at": None,
+            "step_progress": {}
+        })
+
+    return Response({
+        "id": kc.id,
+        "order_id": kc.order_id,
+        "kit_barcode": kc.kit_barcode,
+        "status": kc.status,
+        "collected_at": kc.collected_at.isoformat() if kc.collected_at else None,
+        "step_progress": kc.step_progress or {}
+    })
 
 
 @extend_schema(

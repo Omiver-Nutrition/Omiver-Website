@@ -464,6 +464,7 @@ class KitCollection(models.Model):
     kit_barcode = models.CharField(max_length=100, unique=True, db_index=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="CREATED")
     collected_at = models.DateTimeField(null=True, blank=True)
+    step_progress = models.JSONField(default=dict, blank=True, help_text="Detailed progress state for each collection step")
     diet_log = models.OneToOneField("DietLog", on_delete=models.SET_NULL, null=True, blank=True, related_name="kit_collection")
     exercise_log = models.OneToOneField("ExerciseLog", on_delete=models.SET_NULL, null=True, blank=True, related_name="kit_collection")
     shipping_event = models.ForeignKey("ShippingInfo", on_delete=models.SET_NULL, null=True, blank=True, related_name="kit_collections")

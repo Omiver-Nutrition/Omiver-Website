@@ -61,16 +61,24 @@ urlpatterns = [
     path("provider/patients", views.get_provider_patients, name="get_provider_patients"),
     # recommendations & AI draft workflow
     path("recommendations", views.get_recommendations, name="get_recommendations"),
+    path("recommendations/<int:pk>/pdf", views.download_recommendation_pdf, name="download_recommendation_pdf"),
     path("recommendations/<int:pk>/feedback", views.submit_doctor_feedback_api, name="submit_doctor_feedback_api"),
     path("recommendations/<int:pk>/approve", views.approve_recommendation_api, name="approve_recommendation_api"),
     path("recommendations/generate", views.generate_recommendation_draft_api, name="generate_recommendation_draft_api"),
+    path("biomarker-reports/<int:pk>/pdf", views.download_biomarker_report_pdf, name="download_biomarker_report_pdf"),
     # pricing
     path("pricing/tiers", views.get_all_pricing_tiers, name="get_all_pricing_tiers"),
     path("pricing/tiers/<int:kit_id>", views.get_kit_pricing_tiers, name="get_kit_pricing_tiers"),
 
     # commissions (removed)
 
-    # KitCollection Endpoints
+    # KitCollection Endpoints & Step-by-step APIs
+    path("collection/progress", views.collection_progress, name="collection_progress"),
+    path("collection/step1-link", views.collection_step1_link, name="collection_step1_link"),
+    path("collection/step2-collect", views.collection_step2_collect, name="collection_step2_collect"),
+    path("collection/step2-pouch", views.collection_step2_pouch, name="collection_step2_pouch"),
+    path("collection/step3-prepare", views.collection_step3_prepare, name="collection_step3_prepare"),
+    path("collection/step4-ship", views.collection_step4_ship, name="collection_step4_ship"),
     path("collection/<int:order_id>", views.get_kit_collection, name="get_kit_collection"),
     path("collection/scan", views.collection_scan, name="collection_scan"),
     path("collection/log", views.collection_log, name="collection_log"),
