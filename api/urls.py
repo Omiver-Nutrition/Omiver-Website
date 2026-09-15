@@ -40,6 +40,7 @@ urlpatterns = [
     # checkout & purchases
     path("checkout", views.checkout, name="checkout"),
     path("create-payment-intent", views.create_payment_intent, name="create_payment_intent"),
+    path("complimentary-order", views.create_complimentary_order, name="complimentary_order"),
     path("confirm-payment", views.confirm_payment, name="confirm_payment"),
     path("stripe-webhook", views.stripe_webhook, name="stripe_webhook"),
 

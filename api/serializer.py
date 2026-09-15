@@ -204,7 +204,13 @@ class ClientSerializer(serializers.ModelSerializer):
             "security_question",
             "security_answer",
         ]
-        read_only_fields = ["referral_code", "referred_by"]
+        # NOTE: `user` and `type` are deliberately NOT read-only here. `register()`
+        # must be able to set them at creation time (to link the auth.User and to
+        # create PROVIDER accounts). Marking them read-only makes DRF silently drop
+        # them, producing orphaned Clients with user=None that can never log in.
+        # They are instead made immutable on UPDATE — see update() below, which is
+        # the path that the privilege-escalation attack used.
+        read_only_fields = ["referral_code", "referred_by", "id"]
 
     def create(self, validated_data):
         referred_by_code = validated_data.pop("referred_by_code", None)
@@ -224,7 +230,15 @@ class ClientSerializer(serializers.ModelSerializer):
                 pass  # Invalid code — silently ignore
         return instance
 
+    # Fields that may be set when the Client is first created but must never be
+    # changed afterwards. `type` was the privilege-escalation vector: PATCHing
+    # {"type": "PROVIDER"} on your own record unlocked every other client's data.
+    # `user` is the identity link itself — reassigning it is account takeover.
+    IMMUTABLE_AFTER_CREATE = ("user", "type")
+
     def update(self, instance, validated_data):
+        for field in self.IMMUTABLE_AFTER_CREATE:
+            validated_data.pop(field, None)
         dietary_recall = validated_data.pop("dietary_recall", None)
         exercise_recall = validated_data.pop("exercise_recall", None)
         collection_finished_at = validated_data.pop("collection_finished_at", None)
@@ -250,6 +264,19 @@ class DeliveryEventSerializer(serializers.ModelSerializer):
     class Meta:
         model = DeliveryEvent
         fields = ["id", "event_type", "title", "description", "timestamp", "is_completed"]
+
+
+def _serialize_progress(order):
+    """Render `Order.progress` as JSON-safe milestones.
+
+    Shared by the list and detail serializers so the app sees one shape, and
+    kept out of the model so the model stays free of presentation concerns.
+    """
+    return [
+        {**stage, "timestamp": stage["timestamp"].isoformat() if stage["timestamp"] else None}
+        for stage in order.progress
+    ]
+
 
 
 class KitCollectionSerializer(serializers.ModelSerializer):
@@ -281,6 +308,8 @@ class OrderSerializer(serializers.ModelSerializer):
     exercise_log_id = serializers.SerializerMethodField()
     shipping_event_id = serializers.SerializerMethodField()
     result_info = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    progress = serializers.SerializerMethodField()
 
     def get_barcode_numbers(self, obj):
         return [
@@ -336,12 +365,16 @@ class OrderSerializer(serializers.ModelSerializer):
             return f"Results loaded successfully."
         return None
 
+    def get_progress(self, obj):
+        return _serialize_progress(obj)
+
     class Meta:
         model = Order
         fields = [
             "id", "client", "test_kit", "test_kit_name", "biomarker_count", "barcode_number", "barcode_numbers",
             "kit_barcode", "collection_status", "diet_log_id", "exercise_log_id", "shipping_event_id", "result_info",
-            "order_number", "order_date", "status", "forward_tracking_number", "return_tracking_number", "tracking_number",
+            "order_number", "order_date", "status", "status_display", "progress",
+            "forward_tracking_number", "return_tracking_number", "tracking_number",
             "created_at", "updated_at",
         ]
 
@@ -359,6 +392,8 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     exercise_log_id = serializers.SerializerMethodField()
     shipping_event_id = serializers.SerializerMethodField()
     result_info = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    progress = serializers.SerializerMethodField()
 
     def get_barcode_numbers(self, obj):
         return [
@@ -414,12 +449,16 @@ class OrderDetailSerializer(serializers.ModelSerializer):
             return f"Results loaded successfully."
         return None
 
+    def get_progress(self, obj):
+        return _serialize_progress(obj)
+
     class Meta:
         model = Order
         fields = [
             "id", "client", "test_kit", "barcode_number", "barcode_numbers", "kit_barcode", "collection_status",
             "diet_log_id", "exercise_log_id", "shipping_event_id", "result_info", "order_number", "order_date",
-            "status", "forward_tracking_number", "return_tracking_number", "tracking_number", "delivery_events",
+            "status", "status_display", "progress",
+            "forward_tracking_number", "return_tracking_number", "tracking_number", "delivery_events",
             "created_at", "updated_at",
         ]
 

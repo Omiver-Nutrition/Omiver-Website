@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.contrib.auth.tokens import default_token_generator
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.encoding import force_bytes
 from django.utils import timezone
@@ -59,7 +59,15 @@ class ApiSmokeTests(TestCase):
 			type="INDIVIDUAL",
 		)
 
+		# The provider needs a real auth.User: provider-scoped endpoints now derive
+		# the acting provider from the session instead of trusting a client_id
+		# query parameter, so these tests must actually authenticate as them.
+		self.provider_user = User.objects.create_user(
+			username="provider@example.com",
+			password="OmiverSecure2026!",
+		)
 		self.provider = Client.objects.create(
+			user=self.provider_user,
 			email="provider@example.com",
 			first_name="Priya",
 			last_name="Patel",
@@ -100,7 +108,6 @@ class ApiSmokeTests(TestCase):
 			order_number="ORD-1001",
 			forward_tracking_number="TRK-1001",
 			return_tracking_number="RTR-1001",
-			status="CREATED",
 			quantity=1,
 		)
 		self.order_two = Order.objects.create(
@@ -109,7 +116,6 @@ class ApiSmokeTests(TestCase):
 			order_number="ORD-1002",
 			forward_tracking_number="TRK-1002",
 			return_tracking_number="RTR-1002",
-			status="CONFIRMED",
 			quantity=2,
 		)
 		self.provider_order_pending = Order.objects.create(
@@ -118,7 +124,6 @@ class ApiSmokeTests(TestCase):
 			order_number="ORD-2001",
 			forward_tracking_number="TRK-2001",
 			return_tracking_number="RTR-2001",
-			status="CREATED",
 			quantity=1,
 		)
 		self.provider_order_approved = Order.objects.create(
@@ -127,7 +132,6 @@ class ApiSmokeTests(TestCase):
 			order_number="ORD-2002",
 			forward_tracking_number="TRK-2002",
 			return_tracking_number="RTR-2002",
-			status="CREATED",
 			quantity=1,
 		)
 
@@ -355,11 +359,25 @@ class ApiSmokeTests(TestCase):
 		self.assertEqual(response.data["security_question"], "PET")
 		self.assertEqual(response.data["security_question_display"], "What was the name of your first pet?")
 
-	def test_get_security_question_nonexistent_user_fails(self):
-		payload = {"email": "nonexistent@example.com"}
-		response = self.public_client.post(reverse("get_security_question"), payload, format="json")
-		self.assertEqual(response.status_code, 404)
-		self.assertEqual(response.data["message"], "User with this email does not exist")
+	def test_get_security_question_does_not_leak_account_existence(self):
+		"""This endpoint is unauthenticated, so it must not be an oracle.
+
+		It previously answered 404 "User with this email does not exist" for
+		unknown addresses, which let anyone enumerate registered users. It now
+		returns an indistinguishable generic response.
+		"""
+		unknown = self.public_client.post(
+			reverse("get_security_question"),
+			{"email": "nonexistent@example.com"},
+			format="json",
+		)
+		self.assertEqual(unknown.status_code, 200)
+		self.assertNotIn("does not exist", str(unknown.data))
+		# Same status and same shape as a real account's response.
+		self.assertEqual(
+			set(unknown.data.keys()),
+			{"security_question", "security_question_display"},
+		)
 
 	def test_verify_security_question_answer_success(self):
 		from django.contrib.auth.hashers import make_password
@@ -440,7 +458,11 @@ class ApiSmokeTests(TestCase):
 		)
 
 		url = reverse("default_shipping_address") + f"?client_id={self.patient.id}"
-		resp = self.public_client.get(url)
+
+		# This returns a home address, so it must not be readable anonymously.
+		self.assertIn(self.public_client.get(url).status_code, (401, 403))
+
+		resp = self.api_client.get(url)
 		self.assertEqual(resp.status_code, 200)
 		self.assertEqual(resp.data.get("street_address"), "1600 Pennsylvania Ave")
 
@@ -559,8 +581,15 @@ class ApiSmokeTests(TestCase):
 			},
 		)
 
-	def test_export_orders_csv_returns_attachment(self):
+	def test_export_orders_csv_requires_explicit_scope(self):
+		"""An unscoped export used to return every order in the database."""
 		response = self.api_client.get(reverse("export_orders_csv"))
+		self.assertEqual(response.status_code, 400)
+
+	def test_export_orders_csv_returns_attachment(self):
+		response = self.api_client.get(
+			reverse("export_orders_csv"), {"client_id": self.patient.id}
+		)
 
 		self.assertEqual(response.status_code, 200)
 		self.assertIn("text/csv", response["Content-Type"])
@@ -736,6 +765,7 @@ class ApiSmokeTests(TestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(response.data["id"], self.order.id)
 
+	@override_settings(STRIPE_SECRET_KEY="sk_test_dummy")
 	@patch("api.views.stripe.PaymentIntent.create")
 	def test_create_payment_intent_returns_client_secret(self, mock_create):
 		mock_create.return_value = SimpleNamespace(client_secret="pi_secret_123")
@@ -750,13 +780,61 @@ class ApiSmokeTests(TestCase):
 		self.assertEqual(response.data["clientSecret"], "pi_secret_123")
 		mock_create.assert_called_once()
 
+	@override_settings(STRIPE_SECRET_KEY=None)
+	@patch("api.views.stripe.PaymentIntent.create")
+	def test_create_payment_intent_without_api_key_returns_503(self, mock_create):
+		"""A missing key is a server misconfiguration, not a bad request.
+
+		Previously this leaked Stripe's raw "No API key provided" text with a
+		400, which made the client look at fault.
+		"""
+		response = self.api_client.post(
+			reverse("create_payment_intent"),
+			{"test_kit_id": self.kit.id, "quantity": 1},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, 503)
+		self.assertNotIn("No API key provided", str(response.data))
+		mock_create.assert_not_called()
+
+	@override_settings(STRIPE_SECRET_KEY="sk_test_dummy")
+	@patch("api.views.stripe.PaymentIntent.create")
+	def test_create_payment_intent_below_stripe_minimum_returns_400(self, mock_create):
+		"""A $0.00 kit must be caught here, not by Stripe.
+
+		Stripe's own rejection ("amount must be greater than or equal to the
+		minimum charge amount") reads like an API defect; the real cause is
+		catalogue data, so say so and never spend the round trip.
+		"""
+		free_kit = TestKit.objects.create(name="Beta Test", price=Decimal("0.00"))
+
+		response = self.api_client.post(
+			reverse("create_payment_intent"),
+			{"test_kit_id": free_kit.id, "quantity": 3},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, 400)
+		self.assertIn("below the $0.50", response.data["error"])
+		mock_create.assert_not_called()
+
+	@override_settings(STRIPE_SECRET_KEY="sk_test_dummy")
 	@patch("api.views.stripe.PaymentIntent.retrieve")
 	def test_confirm_payment_creates_purchase(self, mock_retrieve):
+		expected_cents = int(self.kit.get_price_for_quantity(2) * 100)
 		mock_retrieve.return_value = SimpleNamespace(
 			status="succeeded",
+			# confirm_payment verifies the amount Stripe actually collected
+			# against the server-side price, so the mock must carry one.
+			amount=expected_cents,
+			amount_received=expected_cents,
 			metadata={
 				"test_kit_id": str(self.kit.id),
-				"client_id": str(self.other_client.id),
+				# Must match the authenticated caller: confirm_payment now
+				# re-asserts that the intent was minted for this account, so a
+				# leaked intent id cannot be redeemed by someone else.
+				"client_id": str(self.patient.id),
 				"quantity": "2",
 			},
 			charges=SimpleNamespace(
@@ -785,13 +863,17 @@ class ApiSmokeTests(TestCase):
 		self.assertTrue(Purchase.objects.filter(payment__stripe_payment_intent_id="pi_123").exists())
 		self.assertTrue(PaymentInfo.objects.filter(stripe_payment_intent_id="pi_123").exists())
 
+	@override_settings(STRIPE_SECRET_KEY="sk_test_dummy")
 	@patch("api.views.stripe.PaymentIntent.retrieve")
 	def test_confirm_payment_updates_existing_shipping_country(self, mock_retrieve):
+		expected_cents = int(self.kit.get_price_for_quantity(1) * 100)
 		mock_retrieve.return_value = SimpleNamespace(
 			status="succeeded",
+			amount=expected_cents,
+			amount_received=expected_cents,
 			metadata={
 				"test_kit_id": str(self.kit.id),
-				"client_id": str(self.other_client.id),
+				"client_id": str(self.patient.id),
 				"quantity": "1",
 			},
 			charges=SimpleNamespace(
@@ -803,8 +885,11 @@ class ApiSmokeTests(TestCase):
 			),
 		)
 
+		# Must belong to the buyer. It previously belonged to another client,
+		# which meant the test asserted that completing a purchase reaches over
+		# and mutates a third party's address record.
 		existing_address = ShippingAddress.objects.create(
-			client=self.other_client,
+			client=self.patient,
 			street_address="1 Payment Way",
 			city="Austin",
 			state="TX",
@@ -931,18 +1016,42 @@ class ApiSmokeTests(TestCase):
 		self.assertTrue(response.data[0]["is_active"])
 
 	def test_get_referral_link_returns_referral_data(self):
-		response = self.api_client.get(reverse("get_referral_link"), {"client_id": self.provider.id})
+		# Must be requested BY the provider. The endpoint no longer accepts a
+		# client_id naming someone else's provider account.
+		self.api_client.force_authenticate(user=self.provider_user)
+		response = self.api_client.get(reverse("get_referral_link"))
 
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(response.data["patient_count"], 1)
 		self.assertEqual(response.data["referral_code"], self.provider.referral_code)
 
+	def test_get_referral_link_rejects_non_provider(self):
+		"""A patient must not be able to read a provider's referral data."""
+		response = self.api_client.get(
+			reverse("get_referral_link"), {"client_id": self.provider.id}
+		)
+		self.assertEqual(response.status_code, 403)
+
 	def test_get_provider_patients_returns_referred_patients(self):
-		response = self.api_client.get(reverse("get_provider_patients"), {"client_id": self.provider.id})
+		self.api_client.force_authenticate(user=self.provider_user)
+		response = self.api_client.get(reverse("get_provider_patients"))
 
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(len(response.data), 1)
 		self.assertEqual(response.data[0]["email"], self.patient.email)
+
+	def test_get_provider_patients_rejects_patient_caller(self):
+		"""Regression guard for the patient-roster disclosure.
+
+		This endpoint used to derive the provider from a client_id query
+		parameter without ever consulting request.user, so iterating client ids
+		harvested every provider's full patient list.
+		"""
+		response = self.api_client.get(
+			reverse("get_provider_patients"), {"client_id": self.provider.id}
+		)
+		self.assertEqual(response.status_code, 403)
+		self.assertNotIn(self.patient.email, response.content.decode())
 
 
 	def test_get_kit_pricing_tiers_returns_kit_tiers(self):
@@ -1011,18 +1120,30 @@ class ApiSmokeTests(TestCase):
 		self.assertEqual(patient_response.status_code, 200)
 		self.assertEqual(len(patient_response.data), 0)
 
-		# 3. Get recommendations as Doctor (or passing requesting_client_id): should see the draft!
+		# 2b. A patient must not be able to elevate themselves to provider
+		# visibility just by naming a provider in the query string.
+		spoofed = self.api_client.get(
+			reverse("get_recommendations"),
+			{"client_id": self.patient.id, "requesting_client_id": self.provider.id},
+			format="json"
+		)
+		self.assertEqual(spoofed.status_code, 200)
+		self.assertEqual(
+			len(spoofed.data), 0,
+			"requesting_client_id granted draft access without authentication"
+		)
+
+		# 3. The referring provider, properly authenticated, does see the draft.
+		self.api_client.force_authenticate(user=self.provider_user)
 		doc_response = self.api_client.get(
 			reverse("get_recommendations"),
-			{
-				"client_id": self.patient.id,
-				"requesting_client_id": self.provider.id
-			},
+			{"client_id": self.patient.id},
 			format="json"
 		)
 		self.assertEqual(doc_response.status_code, 200)
 		self.assertEqual(len(doc_response.data), 1)
 		self.assertEqual(doc_response.data[0]["id"], rec_id)
+		self.api_client.force_authenticate(user=self.web_user)
 
 		# 4. Submit Doctor Feedback (regenerate)
 		feedback_response = self.api_client.post(

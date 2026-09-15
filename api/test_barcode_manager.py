@@ -72,7 +72,6 @@ class BarcodeManagerTests(TestCase):
         order = Order.objects.create(
             client=self.client_1,
             order_number="ORD-EXISTING1",
-            status="CREATED",
         )
 
         assignment, already_linked = BarcodeManager.link_barcode_to_client(self.barcode_1, self.client_1.id)
@@ -111,7 +110,6 @@ class BarcodeManagerTests(TestCase):
         order = Order.objects.create(
             client=self.client_1,
             order_number="ORD-MATCH",
-            status="CREATED",
             test_kit=self.kit,
         )
         self.assignment_1.order = order
@@ -177,7 +175,6 @@ class BarcodeManagerTests(TestCase):
         order = Order.objects.create(
             client=self.client_1,
             order_number="ORD-ASSIGN1",
-            status="CREATED",
             test_kit=self.kit,
         )
 

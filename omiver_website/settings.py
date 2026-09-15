@@ -32,12 +32,13 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DJANGO_DEBUG", "False").upper()=="TRUE"
 
-ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS").split(",")
+ALLOWED_HOSTS_ENV = os.getenv("DJANGO_ALLOWED_HOSTS")
+ALLOWED_HOSTS = ALLOWED_HOSTS_ENV.split(",") if ALLOWED_HOSTS_ENV else []
 
 CSRF_TRUSTED_ORIGINS = ["https://*.127.0.0.1","https://www.omiver.me", "http://localhost:3000", "http://localhost:5173"]
 
 CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", "False").upper()=="TRUE"
-CORS_ALLOWED_ORIGIN = [
+CORS_ALLOWED_ORIGINS = [
         "https://www.omiver.me",
         "https://omiver.me",
         "http://localhost:3000",
@@ -45,6 +46,15 @@ CORS_ALLOWED_ORIGIN = [
         ]
 CORS_ALLOW_CREDENTIALS = True
 
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'Lax'
+
+DJANGO_SECURE = os.getenv("DJANGO_SECURE", str(not DEBUG)).upper() == "TRUE"
+SESSION_COOKIE_SECURE = DJANGO_SECURE
+CSRF_COOKIE_SECURE = DJANGO_SECURE
+SECURE_SSL_REDIRECT = DJANGO_SECURE
+SECURE_HSTS_SECONDS = 31536000 if DJANGO_SECURE else 0
 # Application definition
 
 INSTALLED_APPS = [
@@ -189,6 +199,17 @@ REST_FRAMEWORK = {
     ),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "100/day",
+        "user": "1000/day",
+        "password_recovery": "5/hour",
+        # Free goods attract automation; keep the claim endpoint tight.
+        "complimentary_order": "5/hour",
+    },
 }
 
 SPECTACULAR_SETTINGS = {

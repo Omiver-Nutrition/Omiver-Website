@@ -266,18 +266,26 @@ class TestKit(models.Model):
 
 
 class Order(models.Model):
-    """Represents a placed test-kit order with shipping/tracking info."""
+    """Represents a placed test-kit order with shipping/tracking info.
 
+    The order has no `status` column. Progress is the fold of its
+    `delivery_events`: the kit makes a round trip (warehouse → customer, then
+    customer → lab) and each leg is recorded as a `DeliveryEvent`. `status` is
+    exposed as a derived property so the API vocabulary is unchanged, but there
+    is exactly one source of truth and it cannot drift from the event feed.
+    """
+
+    # Retained as the public vocabulary: these are the values `status` can
+    # report and that `update_order_status` accepts. They are no longer a
+    # column, so they are not enforced by the database.
     STATUS_CHOICES = [
         ("CREATED", "Created"),
-        ("CONFIRMED", "Order Confirmed"),
-        ("COLLECTED", "Collected"),
-        ("TESTING", "Testing"),
         ("SHIPPED", "Shipped"),
         ("IN_TRANSIT", "In Transit"),
         ("OUT_FOR_DELIVERY", "Out for Delivery"),
         ("DELIVERED", "Delivered"),
-        ("FINISHED", "Finished"),
+        ("SAMPLE_SHIPPED", "Sample Shipped"),
+        ("SAMPLE_DELIVERED", "Sample Delivered"),
         ("CANCELLED", "Cancelled"),
     ]
 
@@ -287,7 +295,6 @@ class Order(models.Model):
     order_number = models.CharField(max_length=50, unique=True)
     order_date = models.DateTimeField(auto_now_add=True)
     quantity = models.PositiveIntegerField(default=1, help_text="Number of kits ordered")
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="CREATED")
     forward_tracking_number = models.CharField(max_length=100, blank=True)
     return_tracking_number = models.CharField(max_length=100, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -371,6 +378,128 @@ class Order(models.Model):
     def tracking_number(self, value):
         self.forward_tracking_number = value or ""
 
+    # ---- Derived state -------------------------------------------------
+    #
+    # The kit's round trip, in order. Everything below reads from this list,
+    # so adding a stage is a one-line change.
+    #
+    #   outbound: we ship a kit to the customer
+    #   return:   the customer ships the sample to the lab
+    JOURNEY = [
+        # (event_type, milestone label, leg)
+        ("ORDER_PLACED", "Ordered", "outbound"),
+        ("SHIPPED", "Shipped to you", "outbound"),
+        ("DELIVERED", "Delivered", "outbound"),
+        ("SAMPLE_SHIPPED", "Sample shipped", "return"),
+        ("SAMPLE_DELIVERED", "Sample delivered", "return"),
+    ]
+
+    # Carrier scans that refine "in transit to the customer" but are not
+    # milestones of their own: they collapse onto the SHIPPED stage.
+    _ROLLS_UP_TO_SHIPPED = ("IN_TRANSIT", "OUT_FOR_DELIVERY")
+
+    # A few event names differ from the public status vocabulary. Translating
+    # here keeps `STATUS_CHOICES` (and therefore every API consumer) unchanged
+    # while letting the event feed use its own, more descriptive names.
+    _EVENT_TO_STATUS = {"ORDER_PLACED": "CREATED"}
+
+    @classmethod
+    def _journey_rank(cls, event_type: str) -> int:
+        """Position of an event in the round trip, or -1 if it is not a stage."""
+        if event_type in cls._ROLLS_UP_TO_SHIPPED:
+            event_type = "SHIPPED"
+        for index, (candidate, _label, _leg) in enumerate(cls.JOURNEY):
+            if candidate == event_type:
+                return index
+        return -1
+
+    @property
+    def status(self):
+        """The furthest stage this order has reached.
+
+        Derived rather than stored: an order is exactly as far along as its
+        events say it is. Returns "CREATED" before anything has happened and
+        "CANCELLED" if the order was cancelled, which short-circuits the rest.
+        """
+        furthest = None
+        furthest_rank = -1
+
+        for event in self.delivery_events.all():
+            if event.event_type == "CANCELLED":
+                return "CANCELLED"
+            rank = self._journey_rank(event.event_type)
+            if rank > furthest_rank:
+                furthest_rank = rank
+                # Report the precise event (e.g. OUT_FOR_DELIVERY) rather than
+                # the stage it rolls up to, so carrier detail is not lost.
+                furthest = event.event_type
+
+        if furthest is None:
+            return "CREATED"
+        return self._EVENT_TO_STATUS.get(furthest, furthest)
+
+    def get_status_display(self) -> str:
+        """Human-readable `status`.
+
+        Django only generates this automatically for fields with `choices`;
+        `status` is a property now, so it has to be written out by hand to keep
+        admin and templates working.
+        """
+        return dict(self.STATUS_CHOICES).get(self.status, self.status)
+
+    @property
+    def progress(self):
+        """The round trip as a list of milestones for a progress UI.
+
+        Each entry is `{key, label, leg, done, timestamp}`. A stage counts as
+        done once any event at or beyond it has been recorded, so a late
+        DELIVERED scan still implies the kit shipped.
+        """
+        events = list(self.delivery_events.all())
+        reached = -1
+        stamps: dict[int, object] = {}
+
+        for event in events:
+            rank = self._journey_rank(event.event_type)
+            if rank < 0:
+                continue
+            reached = max(reached, rank)
+            # Earliest event wins: the stage began when it first happened.
+            if rank not in stamps or (event.timestamp and event.timestamp < stamps[rank]):
+                stamps[rank] = event.timestamp
+
+        cancelled = any(event.event_type == "CANCELLED" for event in events)
+
+        return [
+            {
+                "key": key,
+                "label": label,
+                "leg": leg,
+                "done": (not cancelled) and index <= reached,
+                "timestamp": stamps.get(index),
+            }
+            for index, (key, label, leg) in enumerate(self.JOURNEY)
+        ]
+
+    def record_event(self, event_type: str, title: str = "", description: str = "", *, complete_previous: bool = True):
+        """Advance the order by appending a delivery event.
+
+        This is the only supported way to move an order forward now that there
+        is no status column to assign to.
+        """
+        event = DeliveryEvent.objects.create(
+            order=self,
+            event_type=event_type,
+            title=title or dict(DeliveryEvent.EVENT_TYPES).get(event_type, event_type),
+            description=description,
+            is_completed=True,
+        )
+
+        if complete_previous:
+            self.delivery_events.exclude(pk=event.pk).update(is_completed=True)
+
+        return event
+
 
 class KitBarcodeAssignment(models.Model):
     """Maps a unique kit barcode to the client/test kit that owns it."""
@@ -419,14 +548,26 @@ class KitBarcodeAssignment(models.Model):
 
 
 class DeliveryEvent(models.Model):
-    """Individual delivery milestone (e.g. 'Order Placed', 'Kit Delivered')."""
+    """A milestone in the kit's round trip.
+
+    Two legs are recorded here: the outbound journey to the customer
+    (ORDER_PLACED → SHIPPED → DELIVERED, with optional carrier scans in
+    between) and the return journey of the collected sample to the lab
+    (SAMPLE_SHIPPED → SAMPLE_DELIVERED). `Order.status` is folded from these.
+    """
 
     EVENT_TYPES = [
+        # Outbound: warehouse to customer
         ("ORDER_PLACED", "Order Placed"),
         ("SHIPPED", "Shipped"),
         ("IN_TRANSIT", "In Transit"),
         ("OUT_FOR_DELIVERY", "Out for Delivery"),
         ("DELIVERED", "Delivered"),
+        # Return: customer to laboratory
+        ("SAMPLE_SHIPPED", "Sample Shipped"),
+        ("SAMPLE_DELIVERED", "Sample Delivered"),
+        # Terminal
+        ("CANCELLED", "Cancelled"),
     ]
 
     id = models.AutoField(primary_key=True)

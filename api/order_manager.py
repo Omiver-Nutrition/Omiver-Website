@@ -142,19 +142,17 @@ class OrderManager:
             order_number=order_number,
             forward_tracking_number=forward_tracking_number or "",
             return_tracking_number=return_tracking_number or "",
-            status="CREATED",
         )
 
         # Ensure collection entry
         OrderManager._ensure_collection_for_order(order, kit_barcode=barcode_number)
 
-        # 4. Seed initial delivery event
-        DeliveryEvent.objects.create(
-            order=order,
-            event_type="ORDER_PLACED",
-            title="Order Placed",
-            description="Your order has been received",
-            is_completed=True,
+        # 4. Seed initial delivery event. This is what makes the order report
+        # as "CREATED": there is no status column behind it.
+        order.record_event(
+            "ORDER_PLACED",
+            "Order Placed",
+            "Your order has been received",
         )
 
         # 5. Create Purchase if payment was made
@@ -167,4 +165,28 @@ class OrderManager:
                 status="COMPLETED",
             )
 
+        return order
+
+    @staticmethod
+    def update_order_status(order_id: int, data: dict) -> Order:
+        """Advance an order by recording a delivery event.
+
+        Kept as a method because `collection_step4_ship` already calls it —
+        previously it did not exist, so every drop-off raised AttributeError
+        into a bare `except: pass` and no event was ever written.
+        """
+        try:
+            order = Order.objects.get(pk=order_id)
+        except Order.DoesNotExist:
+            raise OrderIntakeError("Order not found")
+
+        event_type = data.get("status") or data.get("event_type")
+        if event_type not in dict(DeliveryEvent.EVENT_TYPES):
+            raise OrderIntakeError(f"Unknown delivery event: {event_type!r}")
+
+        order.record_event(
+            event_type,
+            data.get("title", ""),
+            data.get("description", ""),
+        )
         return order

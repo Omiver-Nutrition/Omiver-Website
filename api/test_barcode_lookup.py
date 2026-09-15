@@ -1,11 +1,24 @@
 import uuid
 
+from django.contrib.auth.models import User
 from django.test import TestCase
 
 from core.models import Client, KitBarcodeAssignment, Order, TestKit
 
 
 class BarcodeLookupTests(TestCase):
+    def setUp(self):
+        # These endpoints now require authentication, and /api/barcode/assign is
+        # staff-only (it provisions kits). The Client records below are created
+        # ad hoc per test and have no owning auth.User, so act as staff. Whether
+        # a *patient* may reach these endpoints is covered in test_authz.py.
+        self.staff = User.objects.create_user(
+            username="barcode-staff@example.com",
+            password="OmiverSecure2026!",
+            is_staff=True,
+        )
+        self.client.force_login(self.staff)
+
     def test_lookup_not_found(self):
         resp = self.client.get('/api/barcode/lookup', {'barcode': 'NOTFOUND'})
         self.assertEqual(resp.status_code, 404)
@@ -19,7 +32,6 @@ class BarcodeLookupTests(TestCase):
             test_kit=kit,
             order_number='UT' + uuid.uuid4().hex[:10],
             quantity=1,
-            status='PENDING',
         )
         assignment = KitBarcodeAssignment.objects.create(
             client=client_obj,
@@ -46,7 +58,6 @@ class BarcodeLookupTests(TestCase):
             test_kit=kit,
             order_number='LINK' + uuid.uuid4().hex[:10],
             quantity=1,
-            status='PENDING',
         )
         assignment = KitBarcodeAssignment.objects.create(
             client=None,
@@ -80,7 +91,6 @@ class BarcodeLookupTests(TestCase):
             test_kit=kit,
             order_number='OWN' + uuid.uuid4().hex[:10],
             quantity=1,
-            status='PENDING',
         )
         assignment = KitBarcodeAssignment.objects.create(
             client=owner,
@@ -106,7 +116,6 @@ class BarcodeLookupTests(TestCase):
             test_kit=kit,
             order_number='SAME' + uuid.uuid4().hex[:10],
             quantity=1,
-            status='PENDING',
         )
         assignment = KitBarcodeAssignment.objects.create(
             client=client_obj,
@@ -135,7 +144,6 @@ class BarcodeLookupTests(TestCase):
             test_kit=kit,
             order_number='ASSIGN' + uuid.uuid4().hex[:10],
             quantity=1,
-            status='PENDING',
         )
 
         resp = self.client.post('/api/barcode/assign', {

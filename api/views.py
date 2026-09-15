@@ -1,10 +1,19 @@
 import stripe
 import os
 import csv
+import logging
 from datetime import datetime
 from django.conf import settings
 
+logger = logging.getLogger(__name__)
+
 stripe.api_key = settings.STRIPE_SECRET_KEY
+
+if not stripe.api_key:
+    logger.warning(
+        "STRIPE_SECRET_KEY is not set. Checkout endpoints (create-payment-intent, "
+        "confirm-payment, stripe-webhook) will return HTTP 503 until it is configured."
+    )
 
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.dateparse import parse_datetime
@@ -19,14 +28,17 @@ from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.core.mail import send_mail
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.db.models import Q
 from rest_framework import status
 from rest_framework.response import Response
-from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.decorators import api_view, permission_classes, authentication_classes, throttle_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.authtoken.models import Token
 from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serializer
 from rest_framework import serializers
+from api.permissions import resolve_client, require_self_or_provider
 
 from .serializer import (
     ClientSerializer, MealPlanSerializer,
@@ -160,21 +172,9 @@ def create_client(request):
 )
 @api_view(["GET", "PATCH"])
 def client_handler(request, pk):
-    # Ownership / Authorization check
-    is_staff = request.user.is_staff or request.user.is_superuser
-    if not is_staff:
-        try:
-            request_client = Client.objects.get(user=request.user)
-        except Client.DoesNotExist:
-            return Response({"error": "Requesting client profile not found"}, status.HTTP_403_FORBIDDEN)
-
-        if request_client.type == "INDIVIDUAL" and request_client.id != int(pk):
-            return Response({"error": "You do not have permission to access this client profile"}, status.HTTP_403_FORBIDDEN)
-
-    try:
-        client = Client.objects.get(id=pk)
-    except Client.DoesNotExist:
-        return Response({"error": "Client not found"}, status.HTTP_404_NOT_FOUND)
+    client, err = require_self_or_provider(request, pk)
+    if err:
+        return err
 
     if request.method == "PATCH":
         serializer = ClientSerializer(client, data=request.data, partial=True)
@@ -374,8 +374,12 @@ def password_reset_confirm(request):
 
     user.set_password(new_password)
     user.save()
+    Token.objects.filter(user=user).delete()
     return Response({"message": "Password has been reset successfully"}, status=status.HTTP_200_OK)
 
+
+class PasswordRecoveryThrottle(ScopedRateThrottle):
+    scope = "password_recovery"
 
 @extend_schema(
     summary="Get security question for password recovery",
@@ -393,19 +397,26 @@ def password_reset_confirm(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 @authentication_classes([])
+@throttle_classes([PasswordRecoveryThrottle])
 def get_security_question(request):
+    request.throttle_scope = "password_recovery"
     email = (request.data.get("email") or "").strip()
     if not email:
         return Response({"message": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    default_response = Response({
+        "security_question": "default",
+        "security_question_display": "What was the name of your first pet?"
+    }, status=status.HTTP_200_OK)
 
     try:
         user = User.objects.get(username=email)
         client = Client.objects.get(user=user)
     except (User.DoesNotExist, Client.DoesNotExist):
-        return Response({"message": "User with this email does not exist"}, status=status.HTTP_404_NOT_FOUND)
+        return default_response
 
     if not client.security_question or not client.security_answer:
-        return Response({"message": "Security questions are not configured for this account"}, status=status.HTTP_400_BAD_REQUEST)
+        return default_response
 
     question_display = dict(Client.SECURITY_QUESTIONS).get(client.security_question, "")
     return Response({
@@ -431,7 +442,9 @@ def get_security_question(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 @authentication_classes([])
+@throttle_classes([PasswordRecoveryThrottle])
 def verify_security_question_answer(request):
+    request.throttle_scope = "password_recovery"
     email = (request.data.get("email") or "").strip()
     security_question = request.data.get("security_question")
     security_answer = (request.data.get("security_answer") or "").strip().lower()
@@ -441,16 +454,15 @@ def verify_security_question_answer(request):
 
     try:
         user = User.objects.get(username=email)
-        print(f"Found user: {user.username}")
         client = Client.objects.get(user=user)
     except (User.DoesNotExist, Client.DoesNotExist):
-        return Response({"message": "User not found"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"message": "Invalid security answer"}, status=status.HTTP_400_BAD_REQUEST)
 
     if not client.security_question or not client.security_answer:
-        return Response({"message": "Invalid security question or answer"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"message": "Invalid security answer"}, status=status.HTTP_400_BAD_REQUEST)
 
     if client.security_question != security_question:
-        return Response({"message": "Invalid security question, please try again"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"message": "Invalid security answer"}, status=status.HTTP_400_BAD_REQUEST)
 
     from django.contrib.auth.hashers import check_password
     if not check_password(security_answer, client.security_answer):
@@ -502,6 +514,7 @@ def reset_password_with_token(request):
 
     user.set_password(new_password)
     user.save()
+    Token.objects.filter(user=user).delete()
     return Response({"message": "Password has been reset successfully"}, status=status.HTTP_200_OK)
 
 
@@ -536,13 +549,9 @@ def get_referral_link(request):
     Response:
         { "referral_code": "ABC1234567", "patient_count": 3 }
     """
-    client_id = request.GET.get("client_id")
-    if not client_id:
-        return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
-    try:
-        client = Client.objects.get(pk=client_id, type="PROVIDER")
-    except Client.DoesNotExist:
-        return Response({"error": "Provider not found"}, status.HTTP_404_NOT_FOUND)
+    client = resolve_client(request)
+    if not client or client.type != "PROVIDER":
+        return Response({"error": "Provider access required"}, status=status.HTTP_403_FORBIDDEN)
 
     if not client.referral_code:
         client.save()  # Triggers auto-generation via model.save()
@@ -597,13 +606,9 @@ def validate_referral_code(request):
 @api_view(["GET"])
 def get_provider_patients(request):
     """Return all patients referred by a provider, with their health info."""
-    client_id = request.GET.get("client_id")
-    if not client_id:
-        return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
-    try:
-        provider = Client.objects.get(pk=client_id, type="PROVIDER")
-    except Client.DoesNotExist:
-        return Response({"error": "Provider not found"}, status.HTTP_404_NOT_FOUND)
+    provider = resolve_client(request)
+    if not provider or provider.type != "PROVIDER":
+        return Response({"error": "Provider access required"}, status=status.HTTP_403_FORBIDDEN)
 
     patients = (
         provider.referred_patients
@@ -663,9 +668,8 @@ def get_all_pricing_tiers(request):
 @permission_classes([AllowAny])
 @authentication_classes([])
 def login_handler(request):
-    print(request)
     data = request.data
-    user = authenticate(**data)
+    user = authenticate(username=data.get('username'), password=data.get('password'))
     if user is None:
         return Response({"error": "invalid credential"}, status.HTTP_401_UNAUTHORIZED)
 
@@ -681,9 +685,14 @@ def login_handler(request):
             "token": token.key,
             "token_type": "Token",
         }, status.HTTP_200_OK)
-    except Exception as e:
-        print(e)
-        return Response({"error": e}, status.HTTP_404_NOT_FOUND)
+    except Exception:
+        # Do not echo the exception: this path is reachable pre-authentication
+        # and the raw text leaks internal model/state detail to the caller.
+        logger.exception("login succeeded but client lookup failed")
+        return Response(
+            {"error": "No client profile is linked to this account"},
+            status.HTTP_404_NOT_FOUND,
+        )
 
 
 @extend_schema(
@@ -694,9 +703,15 @@ def login_handler(request):
 )
 @api_view(["POST"])
 @permission_classes([AllowAny])
-@authentication_classes([])
+# NOTE: authentication is deliberately left enabled on this view. Suppressing it
+# leaves request.user as AnonymousUser, which makes the token deletion below
+# unreachable and silently leaves the bearer token valid forever after "logout".
+# Permission stays AllowAny so logging out with an already-expired or absent
+# credential is idempotent (200) rather than an error.
 def logout_handler(request):
     try:
+        if request.user and request.user.is_authenticated:
+            Token.objects.filter(user=request.user).delete()
         logout(request)
         request.session.flush()
     except Exception:
@@ -720,7 +735,11 @@ def verify_token_handler(request):
     Verify if the user's authentication token is still valid.
     Returns 200 OK if token is valid, 401 if invalid.
     """
-    return Response({"valid": True}, status.HTTP_200_OK)
+    try:
+        client = Client.objects.get(user=request.user)
+        return Response({"valid": True, "client_id": client.id, "type": client.type, "email": client.email}, status.HTTP_200_OK)
+    except Client.DoesNotExist:
+        return Response({"valid": True}, status.HTTP_200_OK)
 
 
 @extend_schema(
@@ -763,7 +782,8 @@ def check_email(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def generate_mealPlan(request, client_id):
-    client = Client.objects.get(id=client_id)
+    client, err = require_self_or_provider(request, client_id)
+    if err: return err
     return Response({"message": f"will send client info: {client}"}, status.HTTP_200_OK)
 
 
@@ -790,6 +810,11 @@ def meal_plan(request):
     end_date = request.GET.get("end_date")
     if not client_id:
         return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
+    # Ownership gate: this id arrives from the caller, so without this check any
+    # authenticated user could read another client's records by changing it.
+    _target, err = require_self_or_provider(request, client_id)
+    if err:
+        return err
     # Optionally parse start_date and end_date if provided
     start_dt = parse_datetime(start_date) if start_date else None
     end_dt = parse_datetime(end_date) if end_date else None
@@ -831,11 +856,21 @@ def list_orders(request):
     client_id = request.GET.get("client_id")
     if not client_id:
         return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
+    # Ownership gate: this id arrives from the caller, so without this check any
+    # authenticated user could read another client's records by changing it.
+    _target, err = require_self_or_provider(request, client_id)
+    if err:
+        return err
     orders = Order.objects.filter(
         Q(client_id=client_id) |
         Q(barcode_assignments__client_id=client_id) |
         Q(kit_collection__user_id=client_id)
-    ).distinct().prefetch_related("barcode_assignments__test_kit")
+    ).distinct().prefetch_related(
+        "barcode_assignments__test_kit",
+        # `status` and `progress` are folded from the event feed, so without
+        # this each serialised order would trigger its own queries.
+        "delivery_events",
+    )
     return Response(OrderSerializer(orders, many=True).data)
 
 
@@ -849,16 +884,24 @@ def _csv_safe(value):
     return text
 
 
-def _kit_status_to_order_status(status: str) -> str:
-    if status == "SHIPPING":
-        return "SHIPPED"
-    if status in dict(Order.STATUS_CHOICES):
-        return status
+def _kit_status_to_delivery_event(kit_status: str) -> str | None:
+    """Translate a KitCollection lifecycle state into a delivery event.
+
+    The collection tracks the *sample*, so its later states belong to the
+    return leg. `SHIPPING` in particular means the customer has dropped the
+    sample off for the lab — it used to be mapped onto the outbound `SHIPPED`
+    status, which made "we posted you a kit" and "you posted us a sample"
+    indistinguishable.
+    """
     return {
-        "SHIPPED": "SHIPPED",
-        "IN_TRANSIT": "SHIPPED",
-        "OUT_FOR_DELIVERY": "SHIPPED",
-    }.get(status, status)
+        "CREATED": None,              # nothing has happened yet
+        "PENDING": None,              # diet/exercise logged; not a parcel movement
+        "DELIVERED": "DELIVERED",     # kit arrived with the customer
+        "COLLECTED": None,            # sample taken, still in the customer's hands
+        "SHIPPING": "SAMPLE_SHIPPED",
+        "TESTING": "SAMPLE_DELIVERED",
+        "FINISHED": "SAMPLE_DELIVERED",
+    }.get(kit_status)
 
 
 def _ensure_collection_for_order(order: Order, kit_barcode: str | None = None) -> KitCollection:
@@ -900,7 +943,11 @@ def _sync_collection_state(
     if status:
         collection.status = status
         update_fields.append("status")
-        order.status = _kit_status_to_order_status(status)
+        # Mirror the collection change onto the order's event feed, but only
+        # when it corresponds to a real movement of the parcel.
+        event_type = _kit_status_to_delivery_event(status)
+        if event_type and order.status != event_type:
+            order.record_event(event_type)
 
     if dietary_recall is not None and str(dietary_recall).strip():
         diet_log = DietLog.objects.create(client=order.client, recall=str(dietary_recall).strip())
@@ -935,7 +982,9 @@ def _sync_collection_state(
 
     if result_info is not None:
         if status is None:
-            order.status = "FINISHED"
+            # Results exist, so the lab must have received the sample.
+            if order.status != "SAMPLE_DELIVERED":
+                order.record_event("SAMPLE_DELIVERED")
 
     collection.save(update_fields=list(dict.fromkeys(update_fields + ["updated_at"])))
     order.save()
@@ -958,10 +1007,15 @@ def _sync_collection_state(
 def export_orders_csv(request):
     """Export order rows as CSV for spreadsheet import."""
     client_id = request.GET.get("client_id")
+    if not client_id:
+        return Response({"error": "client_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+    client, err = require_self_or_provider(request, client_id)
+    if err:
+        return err
 
     orders = Order.objects.select_related("client").prefetch_related("barcode_assignments__test_kit").order_by("-order_date")
-    if client_id:
-        orders = orders.filter(client_id=client_id)
+    orders = orders.filter(client_id=client_id)
 
     response = HttpResponse(content_type="text/csv; charset=utf-8")
     response["Content-Disposition"] = f'attachment; filename="orders_export_{date.today().isoformat()}.csv"'
@@ -1062,6 +1116,10 @@ def order_detail(request, pk):
         order = Order.objects.prefetch_related("barcode_assignments__test_kit", "delivery_events").get(pk=pk)
     except Order.DoesNotExist:
         return Response({"error": "Order not found"}, status.HTTP_404_NOT_FOUND)
+
+    target, err = require_self_or_provider(request, order.client_id)
+    if err:
+        return err
     return Response(OrderDetailSerializer(order).data)
 
 
@@ -1074,7 +1132,7 @@ def order_detail(request, pk):
     request=inline_serializer(
         name="OrderStatusUpdate",
         fields={
-            "status": serializers.ChoiceField(choices=[c[0] for c in Order.STATUS_CHOICES]),
+            "status": serializers.ChoiceField(choices=[c[0] for c in DeliveryEvent.EVENT_TYPES]),
             "title": serializers.CharField(required=False),
             "description": serializers.CharField(required=False),
             "forward_tracking_number": serializers.CharField(required=False, allow_blank=True),
@@ -1087,14 +1145,21 @@ def order_detail(request, pk):
 )
 @api_view(["PATCH"])
 def update_order_status(request, pk):
-    """Update order status and create a delivery event."""
+    """Advance an order by appending a delivery event."""
     try:
         order = Order.objects.get(pk=pk)
     except Order.DoesNotExist:
         return Response({"error": "Order not found"}, status.HTTP_404_NOT_FOUND)
 
+    target, err = require_self_or_provider(request, order.client_id)
+    if err:
+        return err
+
+    # Validated against the event vocabulary rather than STATUS_CHOICES:
+    # "CREATED" is the derived state of an order with no events, so it is not
+    # something a caller can transition *to*.
     new_status = request.data.get("status")
-    if new_status not in dict(Order.STATUS_CHOICES):
+    if new_status not in dict(DeliveryEvent.EVENT_TYPES):
         return Response({"error": "Invalid status"}, status.HTTP_400_BAD_REQUEST)
 
     forward_tracking_number = (
@@ -1104,12 +1169,15 @@ def update_order_status(request, pk):
     ).strip()
     return_tracking_number = (request.data.get("return_tracking_number") or "").strip()
 
-    order.status = new_status
+    tracking_updates = []
     if forward_tracking_number:
         order.forward_tracking_number = forward_tracking_number
+        tracking_updates.append("forward_tracking_number")
     if return_tracking_number:
         order.return_tracking_number = return_tracking_number
-    order.save()
+        tracking_updates.append("return_tracking_number")
+    if tracking_updates:
+        order.save(update_fields=tracking_updates + ["updated_at"])
 
     if new_status == "SHIPPED":
         ShippingInfo.objects.update_or_create(
@@ -1120,21 +1188,12 @@ def update_order_status(request, pk):
             },
         )
 
-    # Create delivery event
-    title = request.data.get("title", dict(Order.STATUS_CHOICES).get(new_status, new_status))
-    description = request.data.get("description", "")
-    is_completed = new_status in ("DELIVERED",)
-
-    DeliveryEvent.objects.create(
-        order=order,
-        event_type=new_status if new_status in dict(DeliveryEvent.EVENT_TYPES) else "IN_TRANSIT",
-        title=title,
-        description=description,
-        is_completed=is_completed,
+    # The event *is* the status: there is nothing else to assign.
+    order.record_event(
+        new_status,
+        request.data.get("title", ""),
+        request.data.get("description", ""),
     )
-
-    # Mark all previous events as completed
-    order.delivery_events.exclude(event_type=new_status).update(is_completed=True)
 
     order.refresh_from_db()
     return Response(
@@ -1170,6 +1229,10 @@ def track_order(request):
     )
     if not order:
         return Response({"error": "Order not found"}, status.HTTP_404_NOT_FOUND)
+        
+    client, err = require_self_or_provider(request, order.client_id)
+    if err:
+        return err
     return Response(OrderDetailSerializer(order).data)
 
 
@@ -1194,8 +1257,6 @@ def track_order(request):
     tags=["Kits"],
 )
 @api_view(["GET"])
-@permission_classes([AllowAny])
-@authentication_classes([])
 def lookup_barcode(request):
     barcode = (request.GET.get("barcode") or "").strip()
     if not barcode:
@@ -1247,8 +1308,7 @@ def lookup_barcode(request):
     tags=["Kits"],
 )
 @api_view(["POST"])
-@permission_classes([AllowAny])
-@authentication_classes([])
+@permission_classes([IsAuthenticated])
 def link_barcode_assignment(request):
     barcode_number = (request.data.get("barcode_number") or request.data.get("barcode") or request.data.get("kit_code") or "").strip()
     client_id = request.data.get("client_id")
@@ -1257,6 +1317,13 @@ def link_barcode_assignment(request):
         return Response({"message": "barcode_number is required"}, status=status.HTTP_400_BAD_REQUEST)
     if not client_id:
         return Response({"message": "client_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # The barcode is being bound to a person's sample, so the caller must own
+    # (or be the provider for) that client. Without this, any authenticated
+    # user could attach someone else's kit to their own account.
+    _target, err = require_self_or_provider(request, client_id)
+    if err:
+        return err
 
     try:
         assignment, already_linked = BarcodeManager.link_barcode_to_client(barcode_number, client_id)
@@ -1299,14 +1366,17 @@ def link_barcode_assignment(request):
     tags=["Barcode Assignments"],
 )
 @api_view(["POST"])
-@permission_classes([AllowAny])
-@authentication_classes([])
+@permission_classes([IsAuthenticated])
 def unlink_barcode_assignment(request):
     barcode_number = (request.data.get("barcode_number") or "").strip()
     client_id = request.data.get("client_id")
 
     if not barcode_number or not client_id:
         return Response({"message": "barcode_number and client_id are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    _target, err = require_self_or_provider(request, client_id)
+    if err:
+        return err
 
     try:
         BarcodeManager.unlink_barcode_from_client(barcode_number, client_id)
@@ -1343,8 +1413,7 @@ def unlink_barcode_assignment(request):
     tags=["Kits"],
 )
 @api_view(["POST"])
-@permission_classes([AllowAny])
-@authentication_classes([])
+@permission_classes([IsAuthenticated])
 def mark_barcode_collected(request):
     barcode_number = (request.data.get("barcode_number") or request.data.get("barcode") or request.data.get("kit_code") or "").strip()
     client_id = request.data.get("client_id")
@@ -1352,6 +1421,14 @@ def mark_barcode_collected(request):
 
     if not barcode_number:
         return Response({"message": "barcode_number is required"}, status=status.HTTP_400_BAD_REQUEST)
+    if not client_id:
+        return Response({"message": "client_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Marking a sample collected advances that person's clinical workflow, so
+    # the caller must own (or be the provider for) the client.
+    _target, err = require_self_or_provider(request, client_id)
+    if err:
+        return err
 
     collected_at = None
     if collected_at_raw:
@@ -1410,9 +1487,15 @@ def mark_barcode_collected(request):
     tags=["Kits"],
 )
 @api_view(["POST"])
-@permission_classes([AllowAny])
-@authentication_classes([])
+@permission_classes([IsAuthenticated])
 def create_barcode_assignment(request):
+    # Fulfilment-side action: associates a physical barcode with an order
+    # before the kit ships. Customers never call this.
+    # TODO: replace with a dedicated fulfilment/vendor credential once one
+    # exists, rather than piggy-backing on Django staff accounts.
+    if not request.user.is_staff:
+        return Response({"message": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+
     kit_code = (request.data.get("kit_code") or request.data.get("order_number") or "").strip()
     barcode_number = (request.data.get("barcode_number") or request.data.get("barcode") or "").strip()
 
@@ -1470,6 +1553,120 @@ def _detect_card_brand(number: str) -> str:
     return "Card"
 
 
+def _record_purchase(*, client, kit, quantity, payment, data):
+    """Materialise the order records that follow a settled payment.
+
+    Shared by the card flow (`confirm_payment`) and the complimentary flow so
+    the two cannot drift apart — a free order must produce exactly the same
+    barcode assignment, collection, delivery event and purchase as a paid one.
+
+    The caller is responsible for having verified that `payment` is real:
+    this function performs no authorization or pricing checks of its own.
+    """
+    BillingAddress.objects.create(
+        payment=payment,
+        street_address=data.get("street_address"),
+        city=data.get("city"),
+        state=data.get("state"),
+        zip_code=data.get("zip_code"),
+    )
+
+    # Persist shipping address for client so it can be used to prefill future orders.
+    try:
+        ship_street = data.get("street_address")
+        ship_city = data.get("city")
+        ship_state = data.get("state")
+        ship_zip = data.get("zip_code")
+        ship_country = data.get("country") or ""
+
+        if ship_street and ship_city and ship_zip:
+            # If an identical address exists, mark it default; otherwise create and mark default
+            existing = ShippingAddress.objects.filter(client=client, street_address=ship_street, city=ship_city, zip_code=ship_zip).first()
+            # Clear existing defaults
+            ShippingAddress.objects.filter(client=client).update(is_default=False)
+            if existing:
+                fields_to_update = ["is_default", "updated_at"]
+                if existing.state != ship_state:
+                    existing.state = ship_state
+                    fields_to_update.append("state")
+                if existing.country != ship_country:
+                    existing.country = ship_country
+                    fields_to_update.append("country")
+                existing.is_default = True
+                existing.save(update_fields=fields_to_update)
+            else:
+                ShippingAddress.objects.create(
+                    client=client,
+                    street_address=ship_street,
+                    city=ship_city,
+                    state=ship_state,
+                    zip_code=ship_zip,
+                    country=ship_country,
+                    is_default=True,
+                )
+    except Exception:
+        # Do not block checkout if address persistence fails
+        pass
+
+    kit_barcode = "KIT-" + uuid.uuid4().hex[:8].upper()
+    barcode_assignment = KitBarcodeAssignment.objects.create(
+        client=client,
+        test_kit=kit,
+        barcode_number=kit_barcode
+    )
+    order = Order.objects.create(
+        client=client,
+        barcode_assignment=barcode_assignment,
+        order_number=_generate_order_number(),
+        quantity=quantity,
+        forward_tracking_number="",
+        return_tracking_number="",
+    )
+    _ensure_collection_for_order(order, kit_barcode=kit_barcode)
+
+    DeliveryEvent.objects.create(
+        order=order,
+        event_type="ORDER_PLACED",
+        title="Order Placed",
+        description="Your order has been received",
+        is_completed=True,
+    )
+
+    return Purchase.objects.create(
+        client=client,
+        test_kit=kit,
+        payment=payment,
+        order=order,
+        status="COMPLETED",
+    )
+
+
+# Smallest charge Stripe will accept in USD (50 cents).
+# https://docs.stripe.com/currencies#minimum-and-maximum-charge-amounts
+STRIPE_MINIMUM_CHARGE_CENTS = 50
+
+
+def ensure_stripe_configured():
+    """Return an error `Response` when Stripe is not configured, else `None`.
+
+    Without this, a missing `STRIPE_SECRET_KEY` surfaces to the client as
+    Stripe's own "No API key provided" message with a 400, which looks like a
+    bad request rather than a server misconfiguration. `stripe.api_key` is
+    re-synced from settings on every call so a key added to the environment
+    (or overridden in tests) takes effect without stale module state.
+    """
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+
+    if not stripe.api_key:
+        logger.error("Stripe request rejected: STRIPE_SECRET_KEY is not configured.")
+        return Response(
+            {"error": "Payments are not configured on this server."},
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    return None
+
+
 @extend_schema(
     summary="Create a PaymentIntent",
     description="Create a Stripe PaymentIntent for a specific test kit. Returns the client secret.",
@@ -1488,13 +1685,31 @@ def _detect_card_brand(number: str) -> str:
 )
 @api_view(["POST"])
 def create_payment_intent(request):
+    not_configured = ensure_stripe_configured()
+    if not_configured is not None:
+        return not_configured
+
     data = request.data
     test_kit_id = data.get("test_kit_id")
-    client_id = data.get("client_id")
     quantity = int(data.get("quantity", 1))
+
+    # `confirm_payment` now treats this intent's metadata as the authoritative
+    # description of the order, so the client_id written here MUST come from
+    # the session — not the request body. Otherwise a caller could mint an
+    # intent attributing the resulting order to somebody else's account.
+    client = resolve_client(request)
+    if client is None:
+        return Response(
+            {"error": "No client profile is linked to this account"},
+            status.HTTP_403_FORBIDDEN,
+        )
+    client_id = client.id
 
     if not test_kit_id:
         return Response({"error": "test_kit_id is required"}, status.HTTP_400_BAD_REQUEST)
+
+    if quantity < 1:
+        return Response({"error": "quantity must be at least 1"}, status.HTTP_400_BAD_REQUEST)
 
     try:
         kit = TestKit.objects.get(pk=test_kit_id)
@@ -1504,6 +1719,27 @@ def create_payment_intent(request):
     # Calculate amount based on quantity and pricing tiers
     total_price = kit.get_price_for_quantity(quantity)
     amount = int(total_price * 100)
+
+    # Stripe rejects charges below the per-currency minimum (50c for USD). A
+    # mispriced kit (price 0.00) otherwise reaches Stripe and comes back as an
+    # opaque "amount must be greater than or equal to the minimum charge
+    # amount" error that looks like an API bug rather than bad catalogue data.
+    if amount < STRIPE_MINIMUM_CHARGE_CENTS:
+        logger.error(
+            "Refusing to create a PaymentIntent for kit %s (%s): total %s is below the "
+            "Stripe minimum. Check the kit's price.",
+            kit.id, kit.name, total_price,
+        )
+        return Response(
+            {
+                "error": (
+                    f"This test kit is not available for purchase: the order total "
+                    f"(${total_price}) is below the ${STRIPE_MINIMUM_CHARGE_CENTS / 100:.2f} "
+                    f"minimum payment amount."
+                )
+            },
+            status.HTTP_400_BAD_REQUEST,
+        )
 
     try:
         intent = stripe.PaymentIntent.create(
@@ -1542,6 +1778,10 @@ def create_payment_intent(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def confirm_payment(request):
+    not_configured = ensure_stripe_configured()
+    if not_configured is not None:
+        return not_configured
+
     data = request.data
     payment_intent_id = data.get("payment_intent_id")
 
@@ -1549,50 +1789,68 @@ def confirm_payment(request):
         return Response({"error": "payment_intent_id is required"}, status.HTTP_400_BAD_REQUEST)
 
     try:
-        client_id = request.session.get("client_id")
-        test_kit_id = data.get("test_kit_id")
-        quantity = int(data.get("quantity", 1))
+        intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+        
+        if intent.status != "succeeded":
+            return Response({"error": f"Payment status is {intent.status}"}, status.HTTP_400_BAD_REQUEST)
+
+        if PaymentInfo.objects.filter(stripe_payment_intent_id=payment_intent_id).exists():
+            return Response({"message": "Payment already processed"}, status.HTTP_200_OK)
+
+        test_kit_id = intent.metadata.get("test_kit_id")
+        client_id = intent.metadata.get("client_id")
+        quantity = int(intent.metadata.get("quantity", 1))
+
+        if not test_kit_id or not client_id:
+            # fallback: try to use authenticated user's client if metadata missing
+            if request.user and request.user.is_authenticated:
+                try:
+                    client = Client.objects.get(user=request.user)
+                    client_id = client.id
+                except Client.DoesNotExist:
+                    return Response({"error": "Missing metadata in payment intent and no linked client for authenticated user"}, status.HTTP_400_BAD_REQUEST)
+            else:
+                return Response({"error": "Missing metadata in payment intent"}, status.HTTP_400_BAD_REQUEST)
+
+        # The metadata is written by `create_payment_intent` from the session,
+        # so it is trustworthy — but re-assert that the account confirming the
+        # payment is the account the intent was minted for. This closes the
+        # window where a leaked/guessed intent id could be redeemed by someone
+        # else, and catches legacy intents minted before that change.
+        caller = resolve_client(request)
+        if caller is None:
+            return Response(
+                {"error": "No client profile is linked to this account"},
+                status.HTTP_403_FORBIDDEN,
+            )
+        if str(client_id) != str(caller.id) and not request.user.is_staff:
+            return Response({"error": "Payment intent not found"}, status.HTTP_404_NOT_FOUND)
 
         card_brand = "Card"
         card_last_four = "0000"
-
-        if payment_intent_id != "free_order":
-            intent = stripe.PaymentIntent.retrieve(payment_intent_id)
-            
-            if intent.status != "succeeded":
-                return Response({"error": f"Payment status is {intent.status}"}, status.HTTP_400_BAD_REQUEST)
-
-            if PaymentInfo.objects.filter(stripe_payment_intent_id=payment_intent_id).exists():
-                return Response({"message": "Payment already processed"}, status.HTTP_200_OK)
-
-            test_kit_id = intent.metadata.get("test_kit_id") or test_kit_id
-            client_id = intent.metadata.get("client_id") or client_id
-            quantity = int(intent.metadata.get("quantity", 1))
-
-            if not test_kit_id or not client_id:
-                # fallback: try to use authenticated user's client if metadata missing
-                if request.user and request.user.is_authenticated:
-                    try:
-                        client = Client.objects.get(user=request.user)
-                        client_id = client.id
-                    except Client.DoesNotExist:
-                        return Response({"error": "Missing metadata in payment intent and no linked client for authenticated user"}, status.HTTP_400_BAD_REQUEST)
-                else:
-                    return Response({"error": "Missing metadata in payment intent"}, status.HTTP_400_BAD_REQUEST)
-
-            if intent.charges and intent.charges.data:
-                charge = intent.charges.data[0]
-                if charge.payment_method_details and charge.payment_method_details.card:
-                    card = charge.payment_method_details.card
-                    card_brand = card.brand
-                    card_last_four = card.last4
-
-        if not client_id and request.user and request.user.is_authenticated:
-            try:
-                client = Client.objects.get(user=request.user)
-                client_id = client.id
-            except Client.DoesNotExist:
-                return Response({"error": "No linked client for authenticated user"}, status.HTTP_400_BAD_REQUEST)
+        # Stripe removed `PaymentIntent.charges` in favour of `latest_charge`
+        # in recent API versions, so probe for both rather than assuming one.
+        charge = None
+        charges = getattr(intent, "charges", None)
+        if charges and getattr(charges, "data", None):
+            charge = charges.data[0]
+        else:
+            latest_charge = getattr(intent, "latest_charge", None)
+            if latest_charge:
+                try:
+                    charge = stripe.Charge.retrieve(
+                        latest_charge if isinstance(latest_charge, str) else latest_charge.id
+                    )
+                except Exception:
+                    # Card display metadata is cosmetic; never fail the order
+                    # over it.
+                    charge = None
+        if charge is not None:
+            details = getattr(charge, "payment_method_details", None)
+            card = getattr(details, "card", None) if details else None
+            if card:
+                card_brand = card.brand
+                card_last_four = card.last4
 
         if not client_id:
             return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
@@ -1604,6 +1862,22 @@ def confirm_payment(request):
 
         # Calculate total amount based on quantity and pricing tiers
         total_amount = kit.get_price_for_quantity(quantity)
+        
+        # `amount_received` is the authoritative figure, but it can be absent or
+        # 0 depending on the flow/API version, in which case `amount` is correct
+        # for an intent we have already confirmed is "succeeded". If neither is a
+        # usable number we must refuse rather than fall back to 0, which would
+        # compare against a bogus value.
+        stripe_amount = getattr(intent, "amount_received", None)
+        if not isinstance(stripe_amount, int) or stripe_amount == 0:
+            stripe_amount = getattr(intent, "amount", None)
+        if not isinstance(stripe_amount, int):
+            return Response(
+                {"error": "Could not verify the amount paid"},
+                status.HTTP_400_BAD_REQUEST,
+            )
+        if int(total_amount * 100) != int(stripe_amount):
+            return Response({"error": "Payment amount mismatch"}, status.HTTP_400_BAD_REQUEST)
 
         payment = PaymentInfo.objects.create(
             client=client,
@@ -1618,82 +1892,7 @@ def confirm_payment(request):
             stripe_payment_intent_id=payment_intent_id,
         )
 
-        BillingAddress.objects.create(
-            payment=payment,
-            street_address=data.get("street_address"),
-            city=data.get("city"),
-            state=data.get("state"),
-            zip_code=data.get("zip_code"),
-        )
-
-        # Persist shipping address for client so it can be used to prefill future orders.
-        try:
-            ship_street = data.get("street_address")
-            ship_city = data.get("city")
-            ship_state = data.get("state")
-            ship_zip = data.get("zip_code")
-            ship_country = data.get("country") or ""
-
-            if ship_street and ship_city and ship_zip:
-                # If an identical address exists, mark it default; otherwise create and mark default
-                existing = ShippingAddress.objects.filter(client=client, street_address=ship_street, city=ship_city, zip_code=ship_zip).first()
-                # Clear existing defaults
-                ShippingAddress.objects.filter(client=client).update(is_default=False)
-                if existing:
-                    fields_to_update = ["is_default", "updated_at"]
-                    if existing.state != ship_state:
-                        existing.state = ship_state
-                        fields_to_update.append("state")
-                    if existing.country != ship_country:
-                        existing.country = ship_country
-                        fields_to_update.append("country")
-                    existing.is_default = True
-                    existing.save(update_fields=fields_to_update)
-                else:
-                    ShippingAddress.objects.create(
-                        client=client,
-                        street_address=ship_street,
-                        city=ship_city,
-                        state=ship_state,
-                        zip_code=ship_zip,
-                        country=ship_country,
-                        is_default=True,
-                    )
-        except Exception:
-            # Do not block checkout if address persistence fails
-            pass
-        kit_barcode = "KIT-" + uuid.uuid4().hex[:8].upper()
-        barcode_assignment = KitBarcodeAssignment.objects.create(
-            client=client,
-            test_kit=kit,
-            barcode_number=kit_barcode
-        )
-        order = Order.objects.create(
-            client=client,
-            barcode_assignment=barcode_assignment,
-            order_number=_generate_order_number(),
-            quantity=quantity,
-            forward_tracking_number="",
-            return_tracking_number="",
-            status="PENDING",
-        )
-        _ensure_collection_for_order(order, kit_barcode=kit_barcode)
-
-        DeliveryEvent.objects.create(
-            order=order,
-            event_type="ORDER_PLACED",
-            title="Order Placed",
-            description="Your order has been received",
-            is_completed=True,
-        )
-
-        purchase = Purchase.objects.create(
-            client=client,
-            test_kit=kit,
-            payment=payment,
-            order=order,
-            status="COMPLETED",
-        )
+        purchase = _record_purchase(client=client, kit=kit, quantity=quantity, payment=payment, data=data)
 
         return Response(PurchaseDetailSerializer(purchase).data, status.HTTP_201_CREATED)
 
@@ -1701,6 +1900,134 @@ def confirm_payment(request):
         return Response({"error": str(e)}, status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         return Response({"error": str(e)}, status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ComplimentaryOrderThrottle(ScopedRateThrottle):
+    scope = "complimentary_order"
+
+
+# A client may claim at most this many units of a zero-cost kit per request,
+# and at most one such order per kit in total (enforced below). Free goods are
+# the classic target for automated abuse, so both limits are deliberately tight.
+COMPLIMENTARY_ORDER_MAX_QUANTITY = 1
+
+
+@extend_schema(
+    summary="Claim a zero-cost kit",
+    description=(
+        "Place an order for a kit whose catalogue price is $0.00, without going "
+        "through Stripe. The price is recomputed server-side; any kit that costs "
+        "money is rejected and must use the card checkout."
+    ),
+    request=inline_serializer(
+        name="ComplimentaryOrderRequest",
+        fields={
+            "test_kit_id": serializers.IntegerField(),
+            "street_address": serializers.CharField(),
+            "city": serializers.CharField(),
+            "state": serializers.CharField(),
+            "zip_code": serializers.CharField(),
+        },
+    ),
+    responses={201: PurchaseDetailSerializer, 400: None, 403: None, 409: None},
+    tags=["Checkout"],
+)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@throttle_classes([ComplimentaryOrderThrottle])
+def create_complimentary_order(request):
+    """Create an order for a $0.00 kit without a Stripe payment.
+
+    This endpoint deliberately does NOT accept an amount, a price or a payment
+    identifier from the caller. The only input that influences whether an order
+    is created is the kit id, and the decision is made from the catalogue row.
+    An earlier version of this codebase let the client assert that an order was
+    free by passing a sentinel payment id; that was a payment bypass. The rule
+    here is: the server decides what is free, and it only ever agrees when the
+    computed total is exactly zero.
+    """
+    request.throttle_scope = "complimentary_order"
+    data = request.data
+
+    # Session-derived, exactly as in create_payment_intent: never let the body
+    # decide which account an order is attributed to.
+    client = resolve_client(request)
+    if client is None:
+        return Response(
+            {"error": "No client profile is linked to this account"},
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    test_kit_id = data.get("test_kit_id")
+    if not test_kit_id:
+        return Response({"error": "test_kit_id is required"}, status.HTTP_400_BAD_REQUEST)
+
+    try:
+        quantity = int(data.get("quantity", 1))
+    except (TypeError, ValueError):
+        return Response({"error": "quantity must be a number"}, status.HTTP_400_BAD_REQUEST)
+
+    if quantity < 1 or quantity > COMPLIMENTARY_ORDER_MAX_QUANTITY:
+        return Response(
+            {"error": f"quantity must be {COMPLIMENTARY_ORDER_MAX_QUANTITY}"},
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        kit = TestKit.objects.get(pk=test_kit_id)
+    except TestKit.DoesNotExist:
+        return Response({"error": "Test kit not found"}, status.HTTP_404_NOT_FOUND)
+
+    # The authoritative check. Anything that costs money goes through Stripe.
+    total_price = kit.get_price_for_quantity(quantity)
+    if total_price != 0:
+        return Response(
+            {"error": f"This kit costs ${total_price}. Use the card checkout instead."},
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    if Purchase.objects.filter(client=client, test_kit=kit).exists():
+        return Response(
+            {"error": "You have already claimed this kit."},
+            status.HTTP_409_CONFLICT,
+        )
+
+    with transaction.atomic():
+        # Re-check inside the transaction to narrow the window between the
+        # check above and the insert. A row lock would close it entirely, but
+        # SQLite (the dev database) does not support SELECT ... FOR UPDATE, so
+        # the residual race is instead bounded by the throttle and by the fact
+        # that the worst case is one duplicate free kit, not a paid bypass.
+        if Purchase.objects.filter(client=client, test_kit=kit).exists():
+            return Response(
+                {"error": "You have already claimed this kit."},
+                status.HTTP_409_CONFLICT,
+            )
+
+        payment = PaymentInfo.objects.create(
+            client=client,
+            cardholder_name=data.get("cardholder_name", ""),
+            # No card is involved; these columns are non-nullable so they carry
+            # placeholders rather than implying a card was charged.
+            card_last_four="0000",
+            card_brand="",
+            expiry_month=1,
+            expiry_year=2026,
+            payment_method="complimentary",
+            payment_status="COMPLETED",
+            amount=total_price,
+            stripe_payment_intent_id=None,
+        )
+
+        purchase = _record_purchase(
+            client=client, kit=kit, quantity=quantity, payment=payment, data=data
+        )
+
+    logger.info(
+        "Complimentary order %s created for client %s (kit %s)",
+        purchase.order.order_number, client.id, kit.id,
+    )
+    return Response(PurchaseDetailSerializer(purchase).data, status.HTTP_201_CREATED)
 
 
 @csrf_exempt
@@ -1776,7 +2103,6 @@ def stripe_webhook(request):
                          order_number=_generate_order_number(),
                          forward_tracking_number="",
                          return_tracking_number="",
-                         status="PENDING",
                      )
                      _ensure_collection_for_order(order, kit_barcode=kit_barcode)
 
@@ -1871,6 +2197,11 @@ def purchase_history(request):
     client_id = request.GET.get("client_id")
     if not client_id:
         return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
+    # Ownership gate: this id arrives from the caller, so without this check any
+    # authenticated user could read another client's records by changing it.
+    _target, err = require_self_or_provider(request, client_id)
+    if err:
+        return err
     purchases = (
         Purchase.objects
         .filter(client_id=client_id)
@@ -1899,6 +2230,13 @@ def purchase_detail(request, pk):
         )
     except Purchase.DoesNotExist:
         return Response({"error": "Purchase not found"}, status.HTTP_404_NOT_FOUND)
+
+    # Gate on the owning client, otherwise the pk is a direct object reference
+    # and any authenticated user can walk the whole purchase table.
+    _owner, err = require_self_or_provider(request, purchase.client_id)
+    if err:
+        return err
+
     return Response(PurchaseDetailSerializer(purchase).data)
 
 
@@ -1939,6 +2277,11 @@ def list_biomarker_tests(request):
     client_id = request.GET.get("client_id")
     if not client_id:
         return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
+    # Ownership gate: this id arrives from the caller, so without this check any
+    # authenticated user could read another client's records by changing it.
+    _target, err = require_self_or_provider(request, client_id)
+    if err:
+        return err
     tests = BiomarkerTest.objects.filter(client_id=client_id).order_by("-recorded_at")
     return Response(BiomarkerTestSerializer(tests, many=True).data)
 
@@ -1953,13 +2296,16 @@ def list_biomarker_tests(request):
     tags=["Biomarkers"],
 )
 @api_view(["GET"])
-@permission_classes([AllowAny])
-@authentication_classes([])
 def list_biomarker_reports(request):
     """List all biomarker reports for a client, newest first."""
     client_id = request.GET.get("client_id")
     if not client_id:
         return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
+    # Ownership gate: this id arrives from the caller, so without this check any
+    # authenticated user could read another client's records by changing it.
+    _target, err = require_self_or_provider(request, client_id)
+    if err:
+        return err
     reports = BiomarkerReport.objects.filter(client_id=client_id).order_by("-created_at")
     return Response(BiomarkerReportSerializer(reports, many=True).data)
 
@@ -1979,6 +2325,13 @@ def biomarker_test_detail(request, pk):
             .prefetch_related("results__biomarker")
             .get(pk=pk)
         )
+
+        # These are lab results. Without this the pk is a direct object
+        # reference to any patient's test session.
+        _owner, err = require_self_or_provider(request, test.client_id)
+        if err:
+            return err
+
         for i in range(len(test.data.get("result", []))):
             biomarker_id = test.data["result"][i].get("biomarker")
             value = test.data["result"][i].get("value")
@@ -2028,14 +2381,12 @@ def compute_biomarker_status(bm, value):
 @api_view(["GET"])
 def client_dashboard(request):
     """Aggregated dashboard data matching the UI mockup."""
-    client_id = request.GET.get("client_id")
+    client_id = request.GET.get("client_id") or request.data.get("client_id")
     if not client_id:
-        return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
-
-    try:
-        client = Client.objects.get(pk=client_id)
-    except Client.DoesNotExist:
-        return Response({"error": "Client not found"}, status.HTTP_404_NOT_FOUND)
+        return Response({"error": "client_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+    client, err = require_self_or_provider(request, client_id)
+    if err:
+        return err
 
     # ── Profile summary ─────────────────────────────────────────────
     age = None
@@ -2136,6 +2487,11 @@ def client_payments(request):
     client_id = request.GET.get("client_id")
     if not client_id:
         return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
+    # Ownership gate: this id arrives from the caller, so without this check any
+    # authenticated user could read another client's records by changing it.
+    _target, err = require_self_or_provider(request, client_id)
+    if err:
+        return err
     payments = (
         PaymentInfo.objects
         .filter(client_id=client_id)
@@ -2159,6 +2515,11 @@ def list_shipping_addresses(request):
     client_id = request.GET.get("client_id")
     if not client_id:
         return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
+        
+    client, err = require_self_or_provider(request, client_id)
+    if err:
+        return err
+        
     addresses = ShippingAddress.objects.filter(client_id=client_id).order_by("-is_default", "-created_at")
     return Response(ShippingAddressSerializer(addresses, many=True).data)
 
@@ -2173,20 +2534,19 @@ def list_shipping_addresses(request):
     tags=["Clients"],
 )
 @api_view(["GET"])
-@permission_classes([AllowAny])
-@authentication_classes([])
 def default_shipping_address(request):
     client_id = request.GET.get("client_id")
     if not client_id:
-        # Try to derive from authenticated user
         if request.user and request.user.is_authenticated:
-            try:
-                client = Client.objects.get(user=request.user)
+            client = resolve_client(request)
+            if client:
                 client_id = client.id
-            except Client.DoesNotExist:
-                return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
-        else:
-            return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
+    if not client_id:
+        return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
+        
+    client, err = require_self_or_provider(request, client_id)
+    if err:
+        return err
 
     addr = ShippingAddress.objects.filter(client_id=client_id, is_default=True).first()
     if not addr:
@@ -2213,6 +2573,10 @@ def client_memberships(request):
     client_id = request.GET.get("client_id")
     if not client_id:
         return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
+    
+    client, err = require_self_or_provider(request, client_id)
+    if err:
+        return err
     memberships = Membership.objects.filter(client_id=client_id).order_by("-start_date")
     # Using generic data for now since I didn't create a specific serializer
     data = [
@@ -2236,18 +2600,21 @@ def _generate_tracking_number():
 
 
 @api_view(["GET"])
-@permission_classes([AllowAny]) # usually IsAuthenticated
 def get_kit_collection(request, order_id):
     try:
         order = Order.objects.get(pk=order_id)
     except Order.DoesNotExist:
         return Response({"error": "Order not found"}, status=status.HTTP_404_NOT_FOUND)
 
+    # order_id is a direct object reference; gate on who the order belongs to.
+    _owner, err = require_self_or_provider(request, order.client_id)
+    if err:
+        return err
+
     collection = _ensure_collection_for_order(order)
     return Response(KitCollectionSerializer(collection).data)
 
 @api_view(["POST"])
-@permission_classes([AllowAny])
 def collection_scan(request):
     kit_barcode = request.data.get("kit_barcode")
     order_id = request.data.get("order_id")
@@ -2261,7 +2628,6 @@ def collection_scan(request):
     return Response(KitCollectionSerializer(collection).data)
 
 @api_view(["POST"])
-@permission_classes([AllowAny])
 def collection_log(request):
     order_id = request.data.get("order_id")
     dietary_recall = request.data.get("dietary_recall")
@@ -2288,7 +2654,6 @@ def collection_log(request):
     return Response(KitCollectionSerializer(collection).data)
 
 @api_view(["POST"])
-@permission_classes([AllowAny])
 def collection_ship_return(request):
     order_id = request.data.get("order_id")
     tracking_number = request.data.get("tracking_number") or _generate_tracking_number()
@@ -2304,7 +2669,6 @@ def collection_ship_return(request):
     return Response(KitCollectionSerializer(collection).data)
 
 @api_view(["POST"])
-@permission_classes([AllowAny])
 def collection_confirm(request):
     order_id = request.data.get("order_id")
 
@@ -2317,8 +2681,10 @@ def collection_confirm(request):
     return Response(KitCollectionSerializer(collection).data)
 
 @api_view(["POST"])
-@permission_classes([AllowAny])
 def vendor_receive_kit(request):
+    if not request.user.is_staff:
+        # TODO: Add vendor auth concept
+        return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
     kit_barcode = request.data.get("kit_barcode")
     try:
         collection = KitCollection.objects.get(kit_barcode=kit_barcode)
@@ -2333,8 +2699,10 @@ def vendor_receive_kit(request):
     return Response({"status": "TESTING"})
 
 @api_view(["POST"])
-@permission_classes([AllowAny])
 def vendor_finish_kit(request):
+    if not request.user.is_staff:
+        # TODO: Add vendor auth concept
+        return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
     kit_barcode = request.data.get("kit_barcode")
     result_info = request.data.get("result_info")
     try:
@@ -2363,32 +2731,24 @@ from api.ai_utils import generate_ai_recommendation_draft, regenerate_ai_recomme
     tags=["Recommendations"],
 )
 @api_view(["GET"])
-@permission_classes([AllowAny]) # usually IsAuthenticated
-@authentication_classes([])
+@permission_classes([IsAuthenticated])
 def get_recommendations(request):
     client_id = request.GET.get("client_id")
     test_id = request.GET.get("biomarker_test_id") or request.GET.get("test_id")
-    requesting_client_id = request.GET.get("requesting_client_id") # for mock simplicity or session client
     
     if not client_id:
         return Response({"error": "client_id is required"}, status=status.HTTP_400_BAD_REQUEST)
         
-    try:
-        patient = Client.objects.get(pk=client_id)
-    except Client.DoesNotExist:
-        return Response({"error": "Patient not found"}, status=status.HTTP_404_NOT_FOUND)
+    target, err = require_self_or_provider(request, client_id)
+    if err:
+        return err
 
-    # Resolve requesting user role
-    req_client = None
-    if requesting_client_id:
-        req_client = Client.objects.filter(pk=requesting_client_id).first()
-    elif request.user.is_authenticated:
-        req_client = getattr(request.user, "client", None)
-    elif request.session.get("client_id"):
-        req_client = Client.objects.filter(pk=request.session["client_id"]).first()
+    patient = target
 
-    # Determine access level
+    req_client = resolve_client(request)
     is_provider = req_client and req_client.type == "PROVIDER"
+    if request.user.is_staff:
+        is_provider = True
     
     recs = Recommendation.objects.filter(client=patient)
     if test_id:
@@ -2414,8 +2774,7 @@ def get_recommendations(request):
     tags=["Recommendations"],
 )
 @api_view(["POST"])
-@permission_classes([AllowAny])
-@authentication_classes([])
+@permission_classes([IsAuthenticated])
 def submit_doctor_feedback_api(request, pk):
     doctor_feedback = request.data.get("doctor_feedback")
     if not doctor_feedback:
@@ -2425,6 +2784,10 @@ def submit_doctor_feedback_api(request, pk):
         rec = Recommendation.objects.get(pk=pk)
     except Recommendation.DoesNotExist:
         return Response({"error": "Recommendation not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    target, err = require_self_or_provider(request, rec.client_id)
+    if err:
+        return err
 
     rec_updated = regenerate_ai_recommendation_with_feedback(rec.id, doctor_feedback)
     if not rec_updated:
@@ -2446,8 +2809,6 @@ def submit_doctor_feedback_api(request, pk):
     tags=["Recommendations"],
 )
 @api_view(["POST"])
-@permission_classes([AllowAny])
-@authentication_classes([])
 def approve_recommendation_api(request, pk):
     doctor_notes = request.data.get("doctor_notes") or ""
     provider_id = request.data.get("provider_id") # for mock simplicity or session client
@@ -2456,6 +2817,10 @@ def approve_recommendation_api(request, pk):
         rec = Recommendation.objects.get(pk=pk)
     except Recommendation.DoesNotExist:
         return Response({"error": "Recommendation not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    target, err = require_self_or_provider(request, rec.client_id)
+    if err:
+        return err
 
     provider = None
     if provider_id:
@@ -2490,8 +2855,7 @@ def approve_recommendation_api(request, pk):
     tags=["Recommendations"],
 )
 @api_view(["POST"])
-@permission_classes([AllowAny])
-@authentication_classes([])
+@permission_classes([IsAuthenticated])
 def generate_recommendation_draft_api(request):
     test_id = request.data.get("biomarker_test_id") or request.data.get("test_id")
     if not test_id:
@@ -2528,13 +2892,16 @@ def generate_recommendation_draft_api(request):
     tags=["Recommendations"],
 )
 @api_view(["GET"])
-@permission_classes([AllowAny])
-@authentication_classes([])
 def download_recommendation_pdf(request, pk):
     try:
         rec = Recommendation.objects.select_related("client", "biomarker_test", "approved_by").get(pk=pk)
     except Recommendation.DoesNotExist:
         return Response({"error": "Recommendation not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    # This PDF contains the patient's clinical recommendations.
+    _owner, err = require_self_or_provider(request, rec.client_id)
+    if err:
+        return err
 
     pdf_bytes = generate_recommendation_pdf(rec)
     disposition = "inline" if request.GET.get("inline", "").lower() in ["1", "true"] else "attachment"
@@ -2565,13 +2932,16 @@ def download_recommendation_pdf(request, pk):
     tags=["Biomarkers"],
 )
 @api_view(["GET"])
-@permission_classes([AllowAny])
-@authentication_classes([])
 def download_biomarker_report_pdf(request, pk):
     try:
         report = BiomarkerReport.objects.select_related("client").get(pk=pk)
     except BiomarkerReport.DoesNotExist:
         return Response({"error": "BiomarkerReport not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    # This PDF contains the patient's biomarker results.
+    _owner, err = require_self_or_provider(request, report.client_id)
+    if err:
+        return err
 
     pdf_bytes = generate_biomarker_report_pdf(report)
     disposition = "inline" if request.GET.get("inline", "").lower() in ["1", "true"] else "attachment"
@@ -2634,8 +3004,6 @@ def _update_kit_collection_step(client_id, barcode_number=None, order_id=None, s
     tags=["KitCollection"],
 )
 @api_view(["POST"])
-@permission_classes([AllowAny])
-@authentication_classes([])
 def collection_step1_link(request):
     client_id = request.data.get("client_id")
     barcode_number = (request.data.get("barcode_number") or "").strip()
@@ -2643,6 +3011,12 @@ def collection_step1_link(request):
 
     if not client_id or not barcode_number:
         return Response({"error": "client_id and barcode_number are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Ownership gate: client_id comes from the request body, so without this an
+    # authenticated user could drive another patient's collection workflow.
+    _target, err = require_self_or_provider(request, client_id)
+    if err:
+        return err
 
     if order_id:
         try:
@@ -2691,8 +3065,6 @@ def collection_step1_link(request):
     tags=["KitCollection"],
 )
 @api_view(["POST"])
-@permission_classes([AllowAny])
-@authentication_classes([])
 def collection_step2_collect(request):
     client_id = request.data.get("client_id")
     barcode_number = (request.data.get("barcode_number") or "").strip()
@@ -2701,6 +3073,12 @@ def collection_step2_collect(request):
 
     if not client_id or not barcode_number:
         return Response({"error": "client_id and barcode_number are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Ownership gate: client_id comes from the request body, so without this an
+    # authenticated user could drive another patient's collection workflow.
+    _target, err = require_self_or_provider(request, client_id)
+    if err:
+        return err
 
     now_dt = timezone.now()
     now_iso = now_dt.isoformat()
@@ -2749,14 +3127,18 @@ def collection_step2_collect(request):
     tags=["KitCollection"],
 )
 @api_view(["POST"])
-@permission_classes([AllowAny])
-@authentication_classes([])
 def collection_step2_pouch(request):
     client_id = request.data.get("client_id")
     order_id = request.data.get("order_id")
 
     if not client_id:
         return Response({"error": "client_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Ownership gate: client_id comes from the request body, so without this an
+    # authenticated user could drive another patient's collection workflow.
+    _target, err = require_self_or_provider(request, client_id)
+    if err:
+        return err
 
     now_iso = timezone.now().isoformat()
     step_data = {
@@ -2785,14 +3167,18 @@ def collection_step2_pouch(request):
     tags=["KitCollection"],
 )
 @api_view(["POST"])
-@permission_classes([AllowAny])
-@authentication_classes([])
 def collection_step3_prepare(request):
     client_id = request.data.get("client_id")
     order_id = request.data.get("order_id")
 
     if not client_id:
         return Response({"error": "client_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Ownership gate: client_id comes from the request body, so without this an
+    # authenticated user could drive another patient's collection workflow.
+    _target, err = require_self_or_provider(request, client_id)
+    if err:
+        return err
 
     now_iso = timezone.now().isoformat()
     step_data = {
@@ -2821,8 +3207,6 @@ def collection_step3_prepare(request):
     tags=["KitCollection"],
 )
 @api_view(["POST"])
-@permission_classes([AllowAny])
-@authentication_classes([])
 def collection_step4_ship(request):
     client_id = request.data.get("client_id")
     order_id = request.data.get("order_id")
@@ -2830,22 +3214,30 @@ def collection_step4_ship(request):
     if not client_id or not order_id:
         return Response({"error": "client_id and order_id are required"}, status=status.HTTP_400_BAD_REQUEST)
 
-    from .order_manager import OrderManager
+    # Ownership gate: client_id comes from the request body, so without this an
+    # authenticated user could drive another patient's collection workflow.
+    _target, err = require_self_or_provider(request, client_id)
+    if err:
+        return err
+
+    # The customer has dropped the sealed kit at a shipping center: this starts
+    # the RETURN leg of the journey (customer -> laboratory).
+    from .order_manager import OrderIntakeError, OrderManager
     manager = OrderManager()
     try:
         manager.update_order_status(order_id, {
-            "status": "SHIPPED",
-            "title": "Shipped",
-            "description": "Sample dropped off and in transit to laboratory"
+            "status": "SAMPLE_SHIPPED",
+            "title": "Sample Shipped",
+            "description": "Sample dropped off and in transit to laboratory",
         })
-    except Exception:
-        pass
+    except OrderIntakeError as exc:
+        return Response({"error": str(exc)}, status=status.HTTP_404_NOT_FOUND)
 
     now_iso = timezone.now().isoformat()
     step_data = {
         "completed": True,
         "shipped_at": now_iso,
-        "status": "SHIPPED",
+        "status": "SAMPLE_SHIPPED",
         "saved_at": now_iso,
         "message": "Sample marked as shipped"
     }
@@ -2860,7 +3252,7 @@ def collection_step4_ship(request):
     return Response({
         "success": True,
         "step": 4,
-        "status": "SHIPPED",
+        "status": "SAMPLE_SHIPPED",
         "saved_at": now_iso,
         "message": "✓ Step 4 saved: Sample marked as shipped & tracking activated",
         "step_progress": kc.step_progress,
@@ -2873,8 +3265,6 @@ def collection_step4_ship(request):
     tags=["KitCollection"],
 )
 @api_view(["GET"])
-@permission_classes([AllowAny])
-@authentication_classes([])
 def collection_progress(request):
     client_id = request.GET.get("client_id")
     order_id = request.GET.get("order_id")
@@ -2882,9 +3272,21 @@ def collection_progress(request):
     if not client_id and not order_id:
         return Response({"error": "client_id or order_id is required"}, status=status.HTTP_400_BAD_REQUEST)
 
+    # Both lookup keys are caller-supplied, so both need gating. Resolving the
+    # collection first and then checking its owner keeps the order_id path from
+    # becoming an enumeration oracle for other patients' kit barcodes.
+    if client_id:
+        _target, err = require_self_or_provider(request, client_id)
+        if err:
+            return err
+
     kc = None
     if order_id:
         kc = KitCollection.objects.filter(order_id=order_id).first()
+        if kc:
+            _owner, err = require_self_or_provider(request, kc.user_id)
+            if err:
+                return err
     if not kc and client_id:
         kc = KitCollection.objects.filter(user_id=client_id).order_by("-created_at").first()
 
@@ -2930,10 +3332,9 @@ def import_biomarker_csv(request, client_id):
     if not csv_file:
         return Response({"error": "csv_file is required"}, status=status.HTTP_400_BAD_REQUEST)
 
-    try:
-        client = Client.objects.get(pk=client_id)
-    except Client.DoesNotExist:
-        return Response({"error": "Client not found"}, status=status.HTTP_404_NOT_FOUND)
+    client, err = require_self_or_provider(request, client_id)
+    if err:
+        return err
 
     try:
         file_data = csv_file.read().decode("utf-8")
@@ -3144,9 +3545,9 @@ def import_biomarker_csv(request, client_id):
                     collection.status = "FINISHED"
                     collection.save(update_fields=["status", "updated_at"])
 
-                if order:
-                    order.status = "FINISHED"
-                    order.save(update_fields=["status", "updated_at"])
+                if order and order.status != "SAMPLE_DELIVERED":
+                    # Results exist for this barcode, so the lab has the sample.
+                    order.record_event("SAMPLE_DELIVERED")
 
         triggered_count = 0
         for tid in tests_to_trigger:

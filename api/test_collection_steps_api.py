@@ -1,3 +1,4 @@
+from django.contrib.auth.models import User
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -10,11 +11,19 @@ class CollectionStepsApiTests(TestCase):
     def setUp(self):
         self.client_api = APIClient()
 
+        # These endpoints now require authentication AND ownership of the
+        # client_id in the payload, so act as the patient who owns the order.
+        self.user = User.objects.create_user(
+            username="samplepatient@example.com",
+            password="OmiverSecure2026!",
+        )
         self.patient = Client.objects.create(
+            user=self.user,
             email="samplepatient@example.com",
             first_name="Alex",
             last_name="Rivers",
         )
+        self.client_api.force_authenticate(user=self.user)
 
         self.test_kit = TestKit.objects.create(
             name="Metabolic Advanced Test",
@@ -26,7 +35,6 @@ class CollectionStepsApiTests(TestCase):
             client=self.patient,
             order_number="ORD-COLLECT-101",
             quantity=1,
-            status="CREATED"
         )
 
         self.assignment = KitBarcodeAssignment.objects.create(

@@ -46,108 +46,69 @@ class TestKitAdmin(admin.ModelAdmin):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ("order_number", "client", "test_kit", "status", "tracking_number", "order_date")
-    list_filter = ("status",)
+    # `status` is a derived property now, so it cannot be used in list_filter
+    # (admin.E116) and needs a display method to get a sortable-looking column.
+    list_display = ("order_number", "client", "test_kit", "current_status", "tracking_number", "order_date")
+    list_filter = ("delivery_events__event_type",)
     search_fields = ("order_number", "tracking_number")
     raw_id_fields = ("client",)
     inlines = [DeliveryEventInline]
     actions = [
-        "mark_as_confirmed",
         "mark_as_shipped",
         "mark_as_in_transit",
         "mark_as_out_for_delivery",
         "mark_as_delivered",
+        "mark_as_sample_shipped",
+        "mark_as_sample_delivered",
         "mark_as_cancelled",
     ]
 
-    def _set_status_with_event(self, request, queryset, status, title, description, event_type=None, completed=False):
-        event_type = event_type or status
-        updated = 0
+    @admin.display(description="Status")
+    def current_status(self, obj):
+        return obj.get_status_display()
 
+    def _record_event(self, request, queryset, event_type, title, description):
+        updated = 0
         with transaction.atomic():
             for order in queryset:
-                order.status = status
-                order.save(update_fields=["status", "updated_at"])
-
-                DeliveryEvent.objects.create(
-                    order=order,
-                    event_type=event_type,
-                    title=title,
-                    description=description,
-                    is_completed=completed,
-                )
-                order.delivery_events.exclude(event_type=event_type).update(is_completed=True)
+                order.record_event(event_type, title=title, description=description)
                 updated += 1
 
         self.message_user(request, f"Updated {updated} order(s) to {title.lower()}.")
 
-    @admin.action(description="Mark selected orders as confirmed")
-    def mark_as_confirmed(self, request, queryset):
-        self._set_status_with_event(
-            request,
-            queryset,
-            "CONFIRMED",
-            "Order Confirmed",
-            "Your order has been confirmed",
-            event_type="ORDER_PLACED",
-            completed=True,
-        )
-
-    @admin.action(description="Mark selected orders as shipped")
+    @admin.action(description="Mark selected orders as shipped to customer")
     def mark_as_shipped(self, request, queryset):
-        self._set_status_with_event(
-            request,
-            queryset,
-            "SHIPPED",
-            "Shipped",
-            "Your order has shipped",
-            completed=True,
-        )
+        self._record_event(request, queryset, "SHIPPED", "Shipped", "Your kit has shipped")
 
     @admin.action(description="Mark selected orders as in transit")
     def mark_as_in_transit(self, request, queryset):
-        self._set_status_with_event(
-            request,
-            queryset,
-            "IN_TRANSIT",
-            "In Transit",
-            "Your order is in transit",
-            completed=True,
-        )
+        self._record_event(request, queryset, "IN_TRANSIT", "In Transit", "Your kit is in transit")
 
     @admin.action(description="Mark selected orders as out for delivery")
     def mark_as_out_for_delivery(self, request, queryset):
-        self._set_status_with_event(
-            request,
-            queryset,
-            "OUT_FOR_DELIVERY",
-            "Out for Delivery",
-            "Your order is out for delivery",
-            completed=True,
+        self._record_event(request, queryset, "OUT_FOR_DELIVERY", "Out for Delivery", "Your kit is out for delivery")
+
+    @admin.action(description="Mark selected orders as delivered to customer")
+    def mark_as_delivered(self, request, queryset):
+        self._record_event(request, queryset, "DELIVERED", "Delivered", "Your kit has been delivered")
+
+    @admin.action(description="Mark selected orders as sample shipped to lab")
+    def mark_as_sample_shipped(self, request, queryset):
+        self._record_event(
+            request, queryset, "SAMPLE_SHIPPED", "Sample Shipped",
+            "Sample dropped off and in transit to laboratory",
         )
 
-    @admin.action(description="Mark selected orders as delivered")
-    def mark_as_delivered(self, request, queryset):
-        self._set_status_with_event(
-            request,
-            queryset,
-            "DELIVERED",
-            "Delivered",
-            "Your order has been delivered",
-            completed=True,
+    @admin.action(description="Mark selected orders as sample received by lab")
+    def mark_as_sample_delivered(self, request, queryset):
+        self._record_event(
+            request, queryset, "SAMPLE_DELIVERED", "Sample Delivered",
+            "Your sample has arrived at the laboratory",
         )
 
     @admin.action(description="Mark selected orders as cancelled")
     def mark_as_cancelled(self, request, queryset):
-        self._set_status_with_event(
-            request,
-            queryset,
-            "CANCELLED",
-            "Order Cancelled",
-            "Your order has been cancelled",
-            event_type="ORDER_PLACED",
-            completed=False,
-        )
+        self._record_event(request, queryset, "CANCELLED", "Order Cancelled", "Your order has been cancelled")
 
 
 @admin.register(KitBarcodeAssignment)
@@ -432,9 +393,9 @@ class BiomarkerTestAdmin(admin.ModelAdmin):
                             collection.status = "FINISHED"
                             collection.save(update_fields=["status", "updated_at"])
 
-                        if order:
-                            order.status = "FINISHED"
-                            order.save(update_fields=["status", "updated_at"])
+                        if order and order.status != "SAMPLE_DELIVERED":
+                            # Results exist for this barcode, so the lab has the sample.
+                            order.record_event("SAMPLE_DELIVERED")
 
                 triggered_count = 0
                 for tid in tests_to_trigger:

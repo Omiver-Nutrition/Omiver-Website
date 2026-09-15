@@ -48,14 +48,26 @@ class BarcodeManager:
         if assignment.client_id and assignment.client_id != client.id:
             raise BarcodeConflictError("Barcode is already linked to another client")
 
-        # Find client's active pending order
-        active_order = Order.objects.filter(client=client).exclude(status__in=["FINISHED", "CANCELLED"]).first()
-        
+        # Find the client's active order. "Active" used to mean a status that
+        # was not FINISHED/CANCELLED; it is now an order that has not reached
+        # the end of the return leg and has not been cancelled. Expressed as an
+        # exclude on the event feed so it stays a single database query.
+        active_order = (
+            Order.objects.filter(client=client)
+            .exclude(delivery_events__event_type__in=["SAMPLE_DELIVERED", "CANCELLED"])
+            .distinct()
+            .first()
+        )
+
         if not active_order:
             active_order = Order.objects.create(
                 client=client,
                 order_number=f"ORD-{uuid.uuid4().hex[:8].upper()}",
-                status="CREATED"
+            )
+            active_order.record_event(
+                "ORDER_PLACED",
+                "Order Placed",
+                "Your order has been received",
             )
             assignment.order = active_order
             assignment.client = client
