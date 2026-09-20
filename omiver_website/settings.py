@@ -35,15 +35,38 @@ DEBUG = os.getenv("DJANGO_DEBUG", "False").upper()=="TRUE"
 ALLOWED_HOSTS_ENV = os.getenv("DJANGO_ALLOWED_HOSTS")
 ALLOWED_HOSTS = ALLOWED_HOSTS_ENV.split(",") if ALLOWED_HOSTS_ENV else []
 
-CSRF_TRUSTED_ORIGINS = ["https://*.127.0.0.1","https://www.omiver.me", "http://localhost:3000", "http://localhost:5173"]
+CSRF_TRUSTED_ORIGINS = [
+    "https://*.127.0.0.1",
+    "https://www.omiver.me",
+    "https://omiver.me",
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:8100",
+    "http://localhost",
+    "https://localhost",
+    "capacitor://localhost",
+]
+
+_csrf_env = os.getenv("CSRF_TRUSTED_ORIGINS")
+if _csrf_env:
+    CSRF_TRUSTED_ORIGINS.extend([o.strip() for o in _csrf_env.split(",") if o.strip() and o.strip() not in CSRF_TRUSTED_ORIGINS])
 
 CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", "False").upper()=="TRUE"
 CORS_ALLOWED_ORIGINS = [
-        "https://www.omiver.me",
-        "https://omiver.me",
-        "http://localhost:3000",
-        "http://localhost:5173",
-        ]
+    "https://www.omiver.me",
+    "https://omiver.me",
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:8100",
+    "http://localhost",
+    "https://localhost",
+    "capacitor://localhost",
+]
+
+_cors_env = os.getenv("CORS_ALLOWED_ORIGINS")
+if _cors_env:
+    CORS_ALLOWED_ORIGINS.extend([o.strip() for o in _cors_env.split(",") if o.strip() and o.strip() not in CORS_ALLOWED_ORIGINS])
+
 CORS_ALLOW_CREDENTIALS = True
 
 SESSION_COOKIE_HTTPONLY = True

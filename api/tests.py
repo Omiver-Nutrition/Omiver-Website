@@ -493,6 +493,17 @@ class ApiSmokeTests(TestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertTrue(response.data["exists"])
 
+	def test_check_email_cors_headers_for_capacitor_and_local_origins(self):
+		for origin in ["http://localhost:8100", "http://localhost", "https://localhost", "capacitor://localhost"]:
+			response = self.public_client.get(
+				reverse("check_email"),
+				{"email": "test@example.com"},
+				HTTP_ORIGIN=origin,
+			)
+			self.assertEqual(response.status_code, 200)
+			self.assertEqual(response.headers.get("Access-Control-Allow-Origin"), origin)
+			self.assertEqual(response.headers.get("Access-Control-Allow-Credentials"), "true")
+
 	def test_validate_referral_code_reports_valid_provider_code(self):
 		response = self.public_client.get(reverse("validate_referral_code"), {"code": self.provider.referral_code})
 
