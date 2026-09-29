@@ -6,6 +6,9 @@ urlpatterns = [
     # meal plan api
     path("mealPlan", views.meal_plan, name="meal_plan"),
     path("mealPlan/generate/<int:client_id>",views.generate_mealPlan,name="generate_mealPlan"),
+    path("mealPlan/<int:pk>/update-items", views.update_meal_plan_items, name="update_meal_plan_items"),
+    path("mealPlan/<int:pk>/reprompt", views.reprompt_meal_item, name="reprompt_meal_item"),
+    path("exercise-plans", views.list_exercise_plans, name="list_exercise_plans"),
     # client api
     path("client", views.create_client, name="create_client"),
     path("client/<int:pk>", views.client_handler, name="client_handler"),
@@ -66,6 +69,8 @@ urlpatterns = [
     path("recommendations/<int:pk>/feedback", views.submit_doctor_feedback_api, name="submit_doctor_feedback_api"),
     path("recommendations/<int:pk>/approve", views.approve_recommendation_api, name="approve_recommendation_api"),
     path("recommendations/generate", views.generate_recommendation_draft_api, name="generate_recommendation_draft_api"),
+    path("ai/chat", views.ai_chat_api, name="ai_chat_api"),
+    path("ai/plan", views.generate_ai_plan_api, name="generate_ai_plan_api"),
     path("biomarker-reports/<int:pk>/pdf", views.download_biomarker_report_pdf, name="download_biomarker_report_pdf"),
     # pricing
     path("pricing/tiers", views.get_all_pricing_tiers, name="get_all_pricing_tiers"),

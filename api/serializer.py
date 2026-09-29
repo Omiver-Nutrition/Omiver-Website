@@ -254,6 +254,13 @@ class MealPlanSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class ExercisePlanSerializer(serializers.ModelSerializer):
+    class Meta:
+        from core.models import ExercisePlan
+        model = ExercisePlan
+        fields = "__all__"
+
+
 class TestKitSerializer(serializers.ModelSerializer):
     class Meta:
         model = TestKit

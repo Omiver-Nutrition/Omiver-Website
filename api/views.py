@@ -41,7 +41,7 @@ from rest_framework import serializers
 from api.permissions import resolve_client, require_self_or_provider
 
 from .serializer import (
-    ClientSerializer, MealPlanSerializer,
+    ClientSerializer, MealPlanSerializer, ExercisePlanSerializer,
     TestKitSerializer, OrderSerializer, OrderDetailSerializer,
     OrderCreateSerializer, DeliveryEventSerializer,
     CheckoutRequestSerializer, PurchaseDetailSerializer, PaymentInfoSerializer,
@@ -52,7 +52,7 @@ from .serializer import (
     ShippingAddressSerializer, RecommendationSerializer, KitCollectionSerializer,
 )
 from core.models import (
-    MealPlan, Client, TestKit, Order, DeliveryEvent,
+    MealPlan, ExercisePlan, Client, TestKit, Order, DeliveryEvent,
     KitBarcodeAssignment,
     KitCollection, DietLog, ExerciseLog,
     PaymentInfo, BillingAddress, Purchase, ShippingInfo,
@@ -118,16 +118,16 @@ def index(request):
 def verify_kit_code(request):
     """Verify if a kit code (order number) exists in the database."""
     code = request.query_params.get("code", "").strip()
-    
+
     if not code:
         return Response(
             {"valid": False, "message": "Kit code is required"},
             status=status.HTTP_400_BAD_REQUEST,
         )
-    
+
     # Check if the order number exists
     order_exists = Order.objects.filter(order_number=code).exists()
-    
+
     if order_exists:
         return Response(
             {"valid": True, "message": "Kit code verified successfully"},
@@ -775,16 +775,63 @@ def check_email(request):
 
 @extend_schema(
     summary="Generate a meal plan",
-    description="Generate a new meal plan for the given client.",
-    responses={200: None},
+    description="Generate and persist a new personalized meal plan for the given client with estimated calories and macros.",
+    responses={200: MealPlanSerializer()},
     tags=["Meal Plans"],
 )
-@api_view(["GET"])
+@api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])
 def generate_mealPlan(request, client_id):
     client, err = require_self_or_provider(request, client_id)
     if err: return err
-    return Response({"message": f"will send client info: {client}"}, status.HTTP_200_OK)
+
+    import json
+    from api.llm_engine import generate_structured_plan
+
+    latest_test = BiomarkerTest.objects.filter(client=client).order_by("-recorded_at").first()
+    if latest_test:
+        from api.ai_utils import extract_client_profile_and_markers
+        profile, abnormal_markers, all_markers = extract_client_profile_and_markers(latest_test)
+    else:
+        dob = client.date_of_birth
+        age = (timezone.now().date() - dob).days // 365 if dob else "Unknown"
+        profile = {
+            "client_id": client.id,
+            "email": client.email,
+            "age": age,
+            "gender": client.gender or "Unknown",
+            "height": client.height,
+            "weight": client.weight,
+            "fitness_goal": client.fitness_goal,
+            "nutritional_goal": client.nutritional_goal,
+            "health_conditions": client.health_conditions,
+            "dietary_preferences": client.dietary_preferences,
+            "weekly_exercise_routine": client.weekly_exercise_routine,
+            "exercise_days_per_week": client.exercise_days_per_week,
+            "exercise_types": client.exercise_types,
+        }
+        abnormal_markers, all_markers = [], []
+
+    req_client = resolve_client(request)
+    is_provider = request.user.is_staff or (req_client and getattr(req_client, "type", "") == "PROVIDER")
+    user_role = "dietician" if is_provider else "regular"
+
+    plan = generate_structured_plan(profile, abnormal_markers, all_markers, user_role=user_role)
+    meal_plan_data = plan.get("dietary_recommendations", {}).get("sample_meal_plan", [])
+
+    mp = MealPlan.objects.create(
+        client=client,
+        meals=json.dumps(meal_plan_data)
+    )
+    serialized = MealPlanSerializer(mp).data
+    return Response({
+        "message": f"Meal plan generated for {client}",
+        "meal_plan": serialized,
+        "dashboard_goals": plan.get("dashboard_goals"),
+        "dietary_recommendations": plan.get("dietary_recommendations"),
+        "exercise_recommendations": plan.get("exercise_recommendations"),
+        "output_reasoning": plan.get("output_reasoning")
+    }, status=status.HTTP_200_OK)
 
 
 @extend_schema(
@@ -1009,7 +1056,7 @@ def export_orders_csv(request):
     client_id = request.GET.get("client_id")
     if not client_id:
         return Response({"error": "client_id is required"}, status=status.HTTP_400_BAD_REQUEST)
-        
+
     client, err = require_self_or_provider(request, client_id)
     if err:
         return err
@@ -1229,7 +1276,7 @@ def track_order(request):
     )
     if not order:
         return Response({"error": "Order not found"}, status.HTTP_404_NOT_FOUND)
-        
+
     client, err = require_self_or_provider(request, order.client_id)
     if err:
         return err
@@ -1790,16 +1837,15 @@ def confirm_payment(request):
 
     try:
         intent = stripe.PaymentIntent.retrieve(payment_intent_id)
-        
+
         if intent.status != "succeeded":
             return Response({"error": f"Payment status is {intent.status}"}, status.HTTP_400_BAD_REQUEST)
-
         if PaymentInfo.objects.filter(stripe_payment_intent_id=payment_intent_id).exists():
             return Response({"message": "Payment already processed"}, status.HTTP_200_OK)
 
-        test_kit_id = intent.metadata.get("test_kit_id")
-        client_id = intent.metadata.get("client_id")
-        quantity = int(intent.metadata.get("quantity", 1))
+        test_kit_id = intent.metadata["test_kit_id"]
+        client_id = intent.metadata["client_id"]
+        quantity = int(intent.metadata["quantity"])
 
         if not test_kit_id or not client_id:
             # fallback: try to use authenticated user's client if metadata missing
@@ -1862,7 +1908,7 @@ def confirm_payment(request):
 
         # Calculate total amount based on quantity and pricing tiers
         total_amount = kit.get_price_for_quantity(quantity)
-        
+
         # `amount_received` is the authoritative figure, but it can be absent or
         # 0 depending on the flow/API version, in which case `amount` is correct
         # for an intent we have already confirmed is "succeeded". If neither is a
@@ -1896,7 +1942,7 @@ def confirm_payment(request):
 
         return Response(PurchaseDetailSerializer(purchase).data, status.HTTP_201_CREATED)
 
-    except stripe.error.StripeError as e:
+    except stripe.StripeError as e:
         return Response({"error": str(e)}, status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         return Response({"error": str(e)}, status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -2051,7 +2097,7 @@ def stripe_webhook(request):
     if event['type'] == 'payment_intent.succeeded':
         payment_intent = event['data']['object']
         payment_intent_id = payment_intent['id']
-        
+
         if not PaymentInfo.objects.filter(stripe_payment_intent_id=payment_intent_id).exists():
              test_kit_id = payment_intent.metadata.get("test_kit_id")
              client_id = payment_intent.metadata.get("client_id")
@@ -2060,7 +2106,7 @@ def stripe_webhook(request):
                  try:
                      client = Client.objects.get(pk=client_id)
                      kit = TestKit.objects.get(pk=test_kit_id)
-                     
+
                      card_brand = "Card"
                      card_last_four = "0000"
                      if payment_intent.charges and payment_intent.charges.data:
@@ -2515,11 +2561,11 @@ def list_shipping_addresses(request):
     client_id = request.GET.get("client_id")
     if not client_id:
         return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
-        
+
     client, err = require_self_or_provider(request, client_id)
     if err:
         return err
-        
+
     addresses = ShippingAddress.objects.filter(client_id=client_id).order_by("-is_default", "-created_at")
     return Response(ShippingAddressSerializer(addresses, many=True).data)
 
@@ -2543,7 +2589,7 @@ def default_shipping_address(request):
                 client_id = client.id
     if not client_id:
         return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
-        
+
     client, err = require_self_or_provider(request, client_id)
     if err:
         return err
@@ -2573,7 +2619,7 @@ def client_memberships(request):
     client_id = request.GET.get("client_id")
     if not client_id:
         return Response({"error": "client_id is required"}, status.HTTP_400_BAD_REQUEST)
-    
+
     client, err = require_self_or_provider(request, client_id)
     if err:
         return err
@@ -2735,10 +2781,10 @@ from api.ai_utils import generate_ai_recommendation_draft, regenerate_ai_recomme
 def get_recommendations(request):
     client_id = request.GET.get("client_id")
     test_id = request.GET.get("biomarker_test_id") or request.GET.get("test_id")
-    
+
     if not client_id:
         return Response({"error": "client_id is required"}, status=status.HTTP_400_BAD_REQUEST)
-        
+
     target, err = require_self_or_provider(request, client_id)
     if err:
         return err
@@ -2749,15 +2795,15 @@ def get_recommendations(request):
     is_provider = req_client and req_client.type == "PROVIDER"
     if request.user.is_staff:
         is_provider = True
-    
+
     recs = Recommendation.objects.filter(client=patient)
     if test_id:
         recs = recs.filter(biomarker_test_id=test_id)
-        
+
     # Enforce approval filter for individual patients
     if not is_provider:
         recs = recs.filter(status="APPROVED")
-        
+
     return Response(RecommendationSerializer(recs, many=True).data)
 
 
@@ -2779,7 +2825,7 @@ def submit_doctor_feedback_api(request, pk):
     doctor_feedback = request.data.get("doctor_feedback")
     if not doctor_feedback:
         return Response({"error": "doctor_feedback is required"}, status=status.HTTP_400_BAD_REQUEST)
-        
+
     try:
         rec = Recommendation.objects.get(pk=pk)
     except Recommendation.DoesNotExist:
@@ -2792,7 +2838,7 @@ def submit_doctor_feedback_api(request, pk):
     rec_updated = regenerate_ai_recommendation_with_feedback(rec.id, doctor_feedback)
     if not rec_updated:
         return Response({"error": "Failed to regenerate recommendations"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+
     return Response(RecommendationSerializer(rec_updated).data)
 
 
@@ -2812,7 +2858,7 @@ def submit_doctor_feedback_api(request, pk):
 def approve_recommendation_api(request, pk):
     doctor_notes = request.data.get("doctor_notes") or ""
     provider_id = request.data.get("provider_id") # for mock simplicity or session client
-    
+
     try:
         rec = Recommendation.objects.get(pk=pk)
     except Recommendation.DoesNotExist:
@@ -2829,7 +2875,7 @@ def approve_recommendation_api(request, pk):
         provider = getattr(request.user, "client", None)
         if provider and provider.type != "PROVIDER":
             provider = None
-            
+
     rec.status = "APPROVED"
     rec.dietary_final = rec.dietary_draft
     rec.exercise_final = rec.exercise_draft
@@ -2838,7 +2884,7 @@ def approve_recommendation_api(request, pk):
         rec.approved_by = provider
     rec.approved_at = timezone.now()
     rec.save()
-    
+
     return Response(RecommendationSerializer(rec).data)
 
 
@@ -2860,16 +2906,16 @@ def generate_recommendation_draft_api(request):
     test_id = request.data.get("biomarker_test_id") or request.data.get("test_id")
     if not test_id:
         return Response({"error": "biomarker_test_id is required"}, status=status.HTTP_400_BAD_REQUEST)
-        
+
     try:
         test = BiomarkerTest.objects.get(pk=test_id)
     except BiomarkerTest.DoesNotExist:
         return Response({"error": "BiomarkerTest not found"}, status=status.HTTP_404_NOT_FOUND)
-        
+
     rec = generate_ai_recommendation_draft(test.id)
     if not rec:
         return Response({"error": "Failed to generate recommendations"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+
     return Response(RecommendationSerializer(rec).data)
 
 
@@ -2906,7 +2952,7 @@ def download_recommendation_pdf(request, pk):
     pdf_bytes = generate_recommendation_pdf(rec)
     disposition = "inline" if request.GET.get("inline", "").lower() in ["1", "true"] else "attachment"
     filename = f"omiver-recommendation-{rec.id}.pdf"
-    
+
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
     response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
     response["Access-Control-Expose-Headers"] = "Content-Disposition"
@@ -2946,7 +2992,7 @@ def download_biomarker_report_pdf(request, pk):
     pdf_bytes = generate_biomarker_report_pdf(report)
     disposition = "inline" if request.GET.get("inline", "").lower() in ["1", "true"] else "attachment"
     filename = f"omiver-biomarker-report-{report.primary_id}.pdf"
-    
+
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
     response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
     response["Access-Control-Expose-Headers"] = "Content-Disposition"
@@ -3566,7 +3612,258 @@ def import_biomarker_csv(request, client_id):
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+# ── AI Integration & Chat APIs ──────────────────────────────────────────────────
+
+@extend_schema(
+    summary="AI Metabolic & Nutrition Assistant Q&A",
+    description="Ask questions to Omiver precision metabolomics AI assistant with client context.",
+    request=inline_serializer(
+        name="AiChatRequest",
+        fields={
+            "query": serializers.CharField(),
+            "client_id": serializers.IntegerField(required=False),
+        }
+    ),
+    responses={200: inline_serializer(
+        name="AiChatResponse",
+        fields={
+            "answer": serializers.CharField(),
+            "key_takeaways": serializers.ListField(child=serializers.CharField()),
+            "clinical_notes": serializers.CharField(allow_null=True),
+        }
+    )},
+    tags=["AI Assistant"],
+)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def ai_chat_api(request):
+    query = request.data.get("query")
+    if not query:
+        return Response({"error": "query is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    client_id = request.data.get("client_id")
+    client = None
+    if client_id:
+        target, err = require_self_or_provider(request, client_id)
+        if err: return err
+        client = target
+    else:
+        client = resolve_client(request)
+
+    profile = {}
+    abnormal_markers = []
+    if client:
+        latest_test = BiomarkerTest.objects.filter(client=client).order_by("-recorded_at").first()
+        if latest_test:
+            from api.ai_utils import extract_client_profile_and_markers
+            profile, abnormal_markers, _ = extract_client_profile_and_markers(latest_test)
+        else:
+            profile = {
+                "client_id": client.id,
+                "email": client.email,
+                "gender": client.gender,
+                "fitness_goal": client.fitness_goal,
+                "nutritional_goal": client.nutritional_goal,
+            }
+
+    from api.llm_engine import chat_with_ai
+    req_client = resolve_client(request)
+    is_provider = request.user.is_staff or (req_client and getattr(req_client, "type", "") == "PROVIDER")
+    user_role = "dietician" if is_provider else "regular"
+    res = chat_with_ai(query, profile, abnormal_markers, user_role=user_role)
+    return Response(res, status=status.HTTP_200_OK)
 
 
+@extend_schema(
+    summary="Generate complete structured AI plan",
+    description="Generates goals, meals with estimated calories, and conditional reasoning (dietician vs regular).",
+    request=inline_serializer(
+        name="GenerateAiPlanRequest",
+        fields={
+            "client_id": serializers.IntegerField(),
+            "biomarker_test_id": serializers.IntegerField(required=False),
+            "role": serializers.CharField(required=False, default="regular"),
+        }
+    ),
+    tags=["AI Assistant"],
+)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def generate_ai_plan_api(request):
+    client_id = request.data.get("client_id")
+    if not client_id:
+        return Response({"error": "client_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    client, err = require_self_or_provider(request, client_id)
+    if err: return err
+
+    test_id = request.data.get("biomarker_test_id")
+    test = None
+    if test_id:
+        test = BiomarkerTest.objects.filter(pk=test_id, client=client).first()
+    if not test:
+        test = BiomarkerTest.objects.filter(client=client).order_by("-recorded_at").first()
+
+    from api.ai_utils import extract_client_profile_and_markers
+    if test:
+        profile, abnormal_markers, all_markers = extract_client_profile_and_markers(test)
+    else:
+        dob = client.date_of_birth
+        age = (timezone.now().date() - dob).days // 365 if dob else "Unknown"
+        profile = {
+            "client_id": client.id,
+            "email": client.email,
+            "age": age,
+            "gender": client.gender or "Unknown",
+            "height": client.height,
+            "weight": client.weight,
+            "fitness_goal": client.fitness_goal,
+            "nutritional_goal": client.nutritional_goal,
+            "health_conditions": client.health_conditions,
+            "dietary_preferences": client.dietary_preferences,
+            "weekly_exercise_routine": client.weekly_exercise_routine,
+            "exercise_days_per_week": client.exercise_days_per_week,
+            "exercise_types": client.exercise_types,
+        }
+        abnormal_markers, all_markers = [], []
+
+    role = request.data.get("role")
+    if not role:
+        req_client = resolve_client(request)
+        is_provider = request.user.is_staff or (req_client and getattr(req_client, "type", "") == "PROVIDER")
+        role = "dietician" if is_provider else "regular"
+
+    from api.llm_engine import generate_structured_plan
+    plan = generate_structured_plan(profile, abnormal_markers, all_markers, user_role=role)
+    return Response(plan, status=status.HTTP_200_OK)
+
+# ── Granular Meal & Exercise Operations (Reprompting & Removal) ────────────────
+
+@extend_schema(
+    summary="Update / remove items from meal plan",
+    description="Allows removing specific meals or editing meal suggestions directly.",
+    request=inline_serializer(
+        name="UpdateMealPlanRequest",
+        fields={
+            "meals": serializers.ListField(child=serializers.DictField()),
+        }
+    ),
+    responses={200: MealPlanSerializer()},
+    tags=["Meal Plans"],
+)
+@api_view(["PATCH", "PUT"])
+@permission_classes([IsAuthenticated])
+def update_meal_plan_items(request, pk):
+    try:
+        mp = MealPlan.objects.get(pk=pk)
+    except MealPlan.DoesNotExist:
+        return Response({"error": "MealPlan not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    target, err = require_self_or_provider(request, mp.client_id)
+    if err: return err
+
+    meals = request.data.get("meals")
+    if meals is None:
+        return Response({"error": "meals field is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    import json
+    mp.meals = json.dumps(meals) if isinstance(meals, list) else str(meals)
+    mp.save(update_fields=["meals", "updated_at"])
+    return Response(MealPlanSerializer(mp).data, status=status.HTTP_200_OK)
 
 
+@extend_schema(
+    summary="Reprompt and regenerate specific meal item",
+    description="Re-generates a single meal (e.g. Breakfast) or substitutes an ingredient with AI.",
+    request=inline_serializer(
+        name="RepromptMealRequest",
+        fields={
+            "meal_type": serializers.CharField(help_text="e.g. Breakfast, Lunch, Dinner"),
+            "instruction": serializers.CharField(help_text="e.g. Replace oats with high protein savory option, no dairy"),
+        }
+    ),
+    tags=["Meal Plans"],
+)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def reprompt_meal_item(request, pk):
+    try:
+        mp = MealPlan.objects.get(pk=pk)
+    except MealPlan.DoesNotExist:
+        return Response({"error": "MealPlan not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    target, err = require_self_or_provider(request, mp.client_id)
+    if err: return err
+
+    meal_type = request.data.get("meal_type")
+    instruction = request.data.get("instruction")
+    if not (meal_type and instruction):
+        return Response({"error": "meal_type and instruction are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    import json
+    try:
+        current_meals = json.loads(mp.meals) if mp.meals else []
+    except Exception:
+        current_meals = []
+
+    # Call LLM to adjust single meal item
+    from api.llm_engine import call_llm_json
+    system_prompt = "You are Omiver precision nutrition assistant. Adjust the specific meal according to the client instruction while maintaining healthy macros."
+    prompt = f"""
+Current Meals: {json.dumps(current_meals)}
+Target Meal Type to Replace: "{meal_type}"
+User Reprompt Instruction: "{instruction}"
+
+Return a JSON object with:
+{{
+  "meal": "{meal_type}",
+  "suggestion": "New adjusted meal description",
+  "estimated_calories": 500,
+  "macros": {{"protein_g": 35, "carb_g": 45, "fat_g": 15}}
+}}
+"""
+    new_meal = call_llm_json(prompt, system_prompt)
+    if not new_meal:
+        new_meal = {
+            "meal": meal_type,
+            "suggestion": f"Adjusted {meal_type}: {instruction}",
+            "estimated_calories": 450,
+            "macros": {"protein_g": 30, "carb_g": 40, "fat_g": 12}
+        }
+
+    # Replace or append in current_meals
+    replaced = False
+    for i, item in enumerate(current_meals):
+        if isinstance(item, dict) and item.get("meal", "").lower() == meal_type.lower():
+            current_meals[i] = new_meal
+            replaced = True
+            break
+    if not replaced:
+        current_meals.append(new_meal)
+
+    mp.meals = json.dumps(current_meals)
+    mp.save(update_fields=["meals", "updated_at"])
+
+    return Response({
+        "updated_meal": new_meal,
+        "all_meals": current_meals,
+        "meal_plan": MealPlanSerializer(mp).data
+    }, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    summary="Get or update exercise plans",
+    description="Get exercise plans for a client.",
+    tags=["Exercise Plans"],
+)
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def list_exercise_plans(request):
+    client_id = request.GET.get("client_id")
+    if not client_id:
+        return Response({"error": "client_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+    target, err = require_self_or_provider(request, client_id)
+    if err: return err
+
+    plans = ExercisePlan.objects.filter(client_id=client_id).order_by("-created_at")
+    return Response(ExercisePlanSerializer(plans, many=True).data, status=status.HTTP_200_OK)

@@ -804,5 +804,22 @@ class BiomarkerReport(models.Model):
     def __str__(self):
         return f"Report {self.primary_id} for {self.client} ({self.created_at.date()})"
 
+class ExercisePlan(models.Model):
+    """Represents a structured exercise plan for a client with individual workouts and activities."""
 
+    id = models.AutoField(primary_key=True)
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="exercise_plans")
+    biomarker_test = models.ForeignKey("BiomarkerTest", on_delete=models.SET_NULL, null=True, blank=True, related_name="exercise_plans")
+    summary = models.TextField(blank=True, help_text="Exercise programming overview")
+    frequency = models.CharField(max_length=100, blank=True, help_text="e.g. 3-4 sessions per week")
+    activities = models.JSONField(default=list, blank=True, help_text="List of individual exercise activities")
+    precautions = models.JSONField(default=list, blank=True, help_text="List of safety precautions")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"ExercisePlan #{self.id} for {self.client}"
 
