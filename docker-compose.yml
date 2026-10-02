@@ -33,11 +33,7 @@ services:
       - media_files:/app/media
       - app_logs:/app/logs
     environment:
-      - DATABASE_NAME=${DATABASE_NAME}
-      - DATABASE_USER=${DATABASE_USER}
-      - DATABASE_PASSWORD=${DATABASE_PASSWORD}
-      - DATABASE_HOST=${DATABASE_HOST}
-      - DATABASE_PORT=${DATABASE_PORT}
+      - LLM_SERVICE_URL=http://llm:8501
     depends_on:
       db:
         condition: service_healthy
@@ -95,6 +91,28 @@ services:
     command: /bin/bash -c "sleep infinity"
     depends_on:
       - db
+  llm:
+    build:
+      context: ../omiverLLM
+      dockerfile: Dockerfile
+    container_name: omiver_llm
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    env_file:
+      - ./.env
+      - ../omiverLLM/.env
+    environment:
+      - PORT=8501
+      - HOST=0.0.0.0
+    depends_on:
+      db:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 volumes:
   # Database volumes
   postgres_data:

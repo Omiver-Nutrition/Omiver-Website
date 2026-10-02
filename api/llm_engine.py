@@ -25,9 +25,12 @@ PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_HOST = os.getenv("PINECONE_HOST")
 PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "metabodb")
 
+# LLM Service URL (omiverLLM microservice)
+LLM_SERVICE_URL = os.getenv("LLM_SERVICE_URL", "http://llm:8501").rstrip("/")
+
 # LLM Providers
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") or os.getenv("MODEL_API_KEY")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL") or os.getenv("CHAT_MODEL", "gpt-4o-mini")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL") or os.getenv("CHAT_MODEL", "nvidia/nemotron-3-ultra-550b-a55b")
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL") or os.getenv("MODEL_API_BASE_URL")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
@@ -52,8 +55,23 @@ def query_pinecone_rag(query_text: str, k: int = 3) -> str:
 
 def call_llm_json(prompt: str, system_message: str = "") -> Optional[Dict[str, Any]]:
     """
-    Calls the configured LLM (OpenAI / NVIDIA / Gemini) and parses strict JSON.
+    Calls the configured LLM (omiverLLM service / OpenAI / NVIDIA / Gemini) and parses strict JSON.
     """
+    # 0. Try omiverLLM microservice
+    if LLM_SERVICE_URL:
+        try:
+            resp = requests.post(
+                f"{LLM_SERVICE_URL}/api/llm/json",
+                json={"prompt": prompt, "system_message": system_message},
+                timeout=30,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                if "result" in data and isinstance(data["result"], dict):
+                    return data["result"]
+        except Exception as e:
+            logger.warning(f"omiverLLM microservice /api/llm/json call skipped/failed: {e}")
+
     # 1. Try OpenAI / NVIDIA compatible endpoint
     if OPENAI_API_KEY:
         try:
@@ -120,6 +138,27 @@ def generate_structured_plan(
     2. Estimated Calorie Counts & Macros on Meal Plans
     3. Conditional Output Reasoning (Deep for Dieticians, Concise for Regular Accounts)
     """
+    # 0. Try omiverLLM microservice
+    if LLM_SERVICE_URL:
+        try:
+            resp = requests.post(
+                f"{LLM_SERVICE_URL}/api/generate-plan",
+                json={
+                    "client_profile": client_profile,
+                    "abnormal_markers": abnormal_markers,
+                    "all_markers": all_markers,
+                    "role": user_role,
+                    "doctor_feedback": doctor_feedback,
+                },
+                timeout=40,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                if "dietary_recommendations" in data:
+                    return data
+        except Exception as e:
+            logger.warning(f"omiverLLM microservice /api/generate-plan call skipped/failed: {e}")
+
     # 1. Standardized Energy Calculation (One Source of Truth)
     bmr, tdee = calculate_bmr_and_tdee(
         weight_kg=client_profile.get("weight"),
@@ -367,6 +406,27 @@ def chat_with_ai(
     Interactive Q&A using RAG context and client metrics.
     """
     is_dietician = (user_role.lower() in ["dietician", "provider", "doctor", "admin"])
+
+    # 0. Try omiverLLM microservice
+    if LLM_SERVICE_URL:
+        try:
+            resp = requests.post(
+                f"{LLM_SERVICE_URL}/api/chat",
+                json={
+                    "query": query_text,
+                    "client_profile": client_profile,
+                    "abnormal_markers": abnormal_markers or [],
+                    "role": user_role,
+                },
+                timeout=35,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                if "answer" in data:
+                    return data
+        except Exception as e:
+            logger.warning(f"omiverLLM microservice /api/chat call skipped/failed: {e}")
+
     rag_context = query_pinecone_rag(query_text)
 
     system_message = (

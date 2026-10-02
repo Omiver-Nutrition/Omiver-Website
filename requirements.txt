@@ -11,3 +11,4 @@ python-dotenv==1.1.1
 django-cors-headers
 stripe
 drf-spectacular
+requests

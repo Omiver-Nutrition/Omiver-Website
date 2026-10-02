@@ -3807,9 +3807,28 @@ def reprompt_meal_item(request, pk):
         current_meals = []
 
     # Call LLM to adjust single meal item
-    from api.llm_engine import call_llm_json
-    system_prompt = "You are Omiver precision nutrition assistant. Adjust the specific meal according to the client instruction while maintaining healthy macros."
-    prompt = f"""
+    from api.llm_engine import LLM_SERVICE_URL, call_llm_json
+    new_meal = None
+    if LLM_SERVICE_URL:
+        try:
+            import requests
+            resp = requests.post(
+                f"{LLM_SERVICE_URL}/api/reprompt-meal",
+                json={
+                    "meal_type": meal_type,
+                    "instruction": instruction,
+                    "current_meals": current_meals,
+                },
+                timeout=30,
+            )
+            if resp.status_code == 200:
+                new_meal = resp.json()
+        except Exception:
+            new_meal = None
+
+    if not new_meal:
+        system_prompt = "You are Omiver precision nutrition assistant. Adjust the specific meal according to the client instruction while maintaining healthy macros."
+        prompt = f"""
 Current Meals: {json.dumps(current_meals)}
 Target Meal Type to Replace: "{meal_type}"
 User Reprompt Instruction: "{instruction}"
@@ -3822,7 +3841,8 @@ Return a JSON object with:
   "macros": {{"protein_g": 35, "carb_g": 45, "fat_g": 15}}
 }}
 """
-    new_meal = call_llm_json(prompt, system_prompt)
+        new_meal = call_llm_json(prompt, system_prompt)
+
     if not new_meal:
         new_meal = {
             "meal": meal_type,
