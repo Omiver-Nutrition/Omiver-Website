@@ -1,0 +1,150 @@
+[
+  {
+    "model": "core.client",
+    "pk": 3,
+    "fields": {
+      "email": "client_3@example.com",
+      "first_name": "Client",
+      "last_name": "3",
+      "type": "INDIVIDUAL",
+      "created_at": "2026-08-04T10:19:34Z",
+      "updated_at": "2026-08-04T10:19:34Z"
+    }
+  },
+  {
+    "model": "core.client",
+    "pk": 4,
+    "fields": {
+      "email": "p@t.com",
+      "first_name": "U2FsdGVkX19I0A9PpO1hybLEUoPP6qfudaVRGTNl70o=",
+      "last_name": "U2FsdGVkX19tqOaX4C5pFL6W2i7f3/SOoVSIU1jj59o=",
+      "type": "INDIVIDUAL",
+      "date_of_birth": "U2FsdGVkX18q85d07jytaqOqHDL13JpA0pvIMiVkubw=",
+      "bio": "",
+      "location": "",
+      "profile_pic": "",
+      "gender": "U2FsdGVkX1/txEmoMfpOC3lzDy1I7DdoYEuFWjH/xl8=",
+      "height": "U2FsdGVkX1/wrvndbAxRQZa0M1Fkako9LDX5TWLlZxs=",
+      "weight": "U2FsdGVkX1888FYXN5uX93o78eGggEOtidy8gxU0xZk=",
+      "ethnicity": "U2FsdGVkX1/5WoKr87zuEnN9eiYgAqJel5A53BBRnK8=",
+      "sport": "",
+      "health_conditions": "U2FsdGVkX18r94YGtgXbuSCJMc6Mh30aiK9HoleXhYQ=",
+      "dietary_preferences": "",
+      "allergies": "",
+      "dietary_typicality": null,
+      "dietary_preference_mode": "U2FsdGVkX1+HXgB/es4+zn2KQNSmGXLC+Jrm/FSZu+s=",
+      "preferred_cuisines": "U2FsdGVkX1/TpFMl3rxrw/xfZSgHBQe2lUb20ET5bRk=",
+      "avoided_cuisines": "U2FsdGVkX1/MOEmAr63o/7FcOB4OlA7/w2SX/6wJ7W0=",
+      "weekly_exercise_routine": "U2FsdGVkX18/5BGFwVWXEix256rnsoGQOD1/loAVez8=",
+      "exercise_days_per_week": "U2FsdGVkX1997y2xw4IG79tcYHFjlYrxhBehEnUca8g=",
+      "exercise_types": "U2FsdGVkX1+9611eIE3M6LtR/AMTEhLw5nCfVVHNnsk=",
+      "provider_notes": "U2FsdGVkX18hXOYMWgXemwqEoBY5o8KpaKrecEocego=",
+      "fitness_goal": "",
+      "nutritional_goal": "",
+      "referral_code": null,
+      "created_at": "2026-08-04T10:19:34Z",
+      "updated_at": "2026-08-04T10:19:34Z",
+      "user_id": 1,
+      "security_answer": "pbkdf2_sha256$1000000$0m9rSGmv5fSOcYIQ5B1j4W$dm8XxPKuk4NBMwLYbm77kTfhwHmof6aW0NqC8k/WfTM=",
+      "security_question": "PET",
+      "use_custom_key": 0,
+      "referred_by_id": 1
+    }
+  },
+  {
+    "model": "core.client",
+    "pk": 5,
+    "fields": {
+      "email": "client_5@example.com",
+      "first_name": "Client",
+      "last_name": "5",
+      "type": "INDIVIDUAL",
+      "created_at": "2026-08-04T10:19:34Z",
+      "updated_at": "2026-08-04T10:19:34Z"
+    }
+  },
+  {
+    "model": "core.client",
+    "pk": 7,
+    "fields": {
+      "email": "client_7@example.com",
+      "first_name": "Client",
+      "last_name": "7",
+      "type": "INDIVIDUAL",
+      "created_at": "2026-08-04T10:19:34Z",
+      "updated_at": "2026-08-04T10:19:34Z"
+    }
+  },
+  {
+    "model": "core.client",
+    "pk": 10,
+    "fields": {
+      "email": "client_10@example.com",
+      "first_name": "Client",
+      "last_name": "10",
+      "type": "INDIVIDUAL",
+      "created_at": "2026-08-04T10:19:34Z",
+      "updated_at": "2026-08-04T10:19:34Z"
+    }
+  },
+  {
+    "model": "core.client",
+    "pk": 12,
+    "fields": {
+      "email": "client_12@example.com",
+      "first_name": "Client",
+      "last_name": "12",
+      "type": "INDIVIDUAL",
+      "created_at": "2026-08-04T10:19:34Z",
+      "updated_at": "2026-08-04T10:19:34Z"
+    }
+  },
+  {
+    "model": "core.client",
+    "pk": 13,
+    "fields": {
+      "email": "client_13@example.com",
+      "first_name": "Client",
+      "last_name": "13",
+      "type": "INDIVIDUAL",
+      "created_at": "2026-08-04T10:19:34Z",
+      "updated_at": "2026-08-04T10:19:34Z"
+    }
+  },
+  {
+    "model": "core.client",
+    "pk": 18,
+    "fields": {
+      "email": "client_18@example.com",
+      "first_name": "Client",
+      "last_name": "18",
+      "type": "INDIVIDUAL",
+      "created_at": "2026-08-04T10:19:34Z",
+      "updated_at": "2026-08-04T10:19:34Z"
+    }
+  },
+  {
+    "model": "core.client",
+    "pk": 19,
+    "fields": {
+      "email": "client_19@example.com",
+      "first_name": "Client",
+      "last_name": "19",
+      "type": "INDIVIDUAL",
+      "created_at": "2026-08-04T10:19:34Z",
+      "updated_at": "2026-08-04T10:19:34Z"
+    }
+  },
+  {
+    "model": "core.client",
+    "pk": 20,
+    "fields": {
+      "email": "client_20@example.com",
+      "first_name": "Client",
+      "last_name": "20",
+      "type": "INDIVIDUAL",
+      "created_at": "2026-08-04T10:19:34Z",
+      "updated_at": "2026-08-04T10:19:34Z"
+    }
+  }
+]

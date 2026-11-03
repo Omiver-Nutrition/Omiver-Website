@@ -16,6 +16,8 @@ from .ai_calculator import (
     calculate_bmr_and_tdee,
     calculate_target_calories,
     calculate_macronutrients,
+    inches_to_cm,
+    pounds_to_kg,
 )
 
 logger = logging.getLogger(__name__)
@@ -160,9 +162,11 @@ def generate_structured_plan(
             logger.warning(f"omiverLLM microservice /api/generate-plan call skipped/failed: {e}")
 
     # 1. Standardized Energy Calculation (One Source of Truth)
+    # Profile height/weight are stored in inches/pounds; the formulas are metric.
+    weight_kg = pounds_to_kg(client_profile.get("weight"))
     bmr, tdee = calculate_bmr_and_tdee(
-        weight_kg=client_profile.get("weight"),
-        height_cm=client_profile.get("height"),
+        weight_kg=weight_kg,
+        height_cm=inches_to_cm(client_profile.get("height")),
         age=client_profile.get("age") if isinstance(client_profile.get("age"), int) else None,
         gender=client_profile.get("gender"),
         exercise_days_per_week=client_profile.get("exercise_days_per_week"),
@@ -175,7 +179,7 @@ def generate_structured_plan(
     )
     macros = calculate_macronutrients(
         target_calories=target_calories,
-        weight_kg=client_profile.get("weight"),
+        weight_kg=weight_kg,
         fitness_goal=client_profile.get("fitness_goal"),
         nutritional_goal=client_profile.get("nutritional_goal")
     )
@@ -203,7 +207,7 @@ def generate_structured_plan(
     prompt = f"""
 CLIENT PROFILE:
 - Age: {client_profile.get('age')}, Gender: {client_profile.get('gender')}
-- Height: {client_profile.get('height')} cm, Weight: {client_profile.get('weight')} kg
+- Height: {client_profile.get('height')} in, Weight: {client_profile.get('weight')} lb
 - Primary Fitness Goal: {client_profile.get('fitness_goal')}
 - Nutritional Goal: {client_profile.get('nutritional_goal')}
 - Health Conditions: {client_profile.get('health_conditions')}

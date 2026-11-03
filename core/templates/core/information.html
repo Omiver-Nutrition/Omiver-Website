@@ -1,292 +1,102 @@
 {% extends 'core/base.html' %}
 {% load static %}
 
-{% block inner_styles %}
-<link rel="stylesheet" href="{% static 'core/information/style.css' %}" />
-
-<script>
-  function initMobileSliders() {
-    if (window.innerWidth > 1000) return // only mobile
-
-    const sliders = document.querySelectorAll('.mobile-slider')
-    sliders.forEach((slider) => {
-      const items = slider.querySelectorAll('.slider-item')
-      let currentIndex = 0
-
-      items.forEach((item, index) => item.classList.toggle('active', index === currentIndex))
-
-      const prevBtn = slider.querySelector('.prev-btn')
-      const nextBtn = slider.querySelector('.next-btn')
-
-      prevBtn.addEventListener('click', () => {
-        items[currentIndex].classList.remove('active')
-        currentIndex = (currentIndex - 1 + items.length) % items.length
-        items[currentIndex].classList.add('active')
-      })
-
-      nextBtn.addEventListener('click', () => {
-        items[currentIndex].classList.remove('active')
-        currentIndex = (currentIndex + 1) % items.length
-        items[currentIndex].classList.add('active')
-      })
-    })
-  }
-
-  window.addEventListener('load', initMobileSliders)
-  window.addEventListener('resize', initMobileSliders)
-</script>
-
-<script>
-  document.addEventListener('DOMContentLoaded', () => {
-    // For the response message from the contact us form
-    document.body.addEventListener('htmx:afterSwap', (e) => {
-      const response = document.querySelector('.form-response')
-      if (response) {
-        setTimeout(() => {
-          response.style.opacity = 0
-          setTimeout(() => response.remove(), 300)
-        }, 2000)
-      }
-    })
-  })
-</script>
-{% endblock %}
+{% block title %}Omiver - How Omiver Works{% endblock %}
 
 {% block inner_content %}
-<div class="page-section our-process-box">
-  <p class="section-title">End-to-end Service for Full Support</p>
-  <h1 class="section-description">Omiver's end-to-end supports you throughout your wellness journey</h1>
-  <div class="main-infographic">
-    <div class="left-column mobile-slider">
-      <div class="slider-wrapper">
-        <div class="point-info-box slider-item">
-          <div class="info-icon">
-            <img src="{% static 'core/information/profile_icon.svg' %}" />
-          </div>
-          <span>
-            <h3>Goal Consultation</h3>
-            <h4>Biodemographic and lifestyle assessment</h4>
-          </span>
-        </div>
-        <div class="point-info-box slider-item">
-          <div class="info-icon">
-            <img src="{% static 'core/information/beaker_icon.svg' %}" />
-          </div>
-          <span>
-            <h3>Sample Collection</h3>
-            <h4>At-home testing kits for whole blood samples</h4>
-          </span>
-        </div>
-        <div class="point-info-box slider-item">
-          <div class="info-icon">
-            <img src="{% static 'core/information/molecule_icon.svg' %}" />
-          </div>
-          <span>
-            <h3>Molecular Profiling</h3>
-            <h4>Biochemical and molecular data acquisition</h4>
-          </span>
-        </div>
-        <div class="point-info-box slider-item">
-          <div class="info-icon">
-            <img src="{% static 'core/information/gear_icon.svg' %}" />
-          </div>
-          <span>
-            <h3>Regimen Generation</h3>
-            <h4>Actionable insights, adaptative feedback</h4>
-          </span>
-        </div>
-        <div class="point-info-box slider-item">
-          <div class="info-icon">
-            <img src="{% static 'core/information/megaphone_icon.svg' %}" />
-          </div>
-          <span>
-            <h3>Platform Reporting</h3>
-            <h4>Platform access for monitoring and feedback reporting</h4>
-          </span>
-        </div>
-      </div>
-
-      <div class="slider-buttons">
-        <button class="prev-btn">‹</button>
-        <button class="next-btn">›</button>
-      </div>
+<section class="section" aria-labelledby="journey-heading" style="padding-top:clamp(48px,6vw,88px)">
+  <div class="wrap">
+    <div class="section-head">
+      <h1 id="journey-heading" style="font-size:var(--fs-h2);line-height:1.08;letter-spacing:-0.028em;font-weight:650">End-to-end Service for Full Support</h1>
+      <p class="lede">Omiver's end-to-end supports you throughout your wellness journey</p>
     </div>
-    <div class="right-column">
-      <img src="{% static 'core/information/report_screenshot.png' %}" />
+    <div class="split">
+      <ol class="journey" data-reveal>
+        <li><span class="num">1</span><div><h3>Goal Consultation</h3><p>Biodemographic and lifestyle assessment</p></div></li>
+        <li><span class="num">2</span><div><h3>Sample Collection</h3><p>At-home testing kits for whole blood samples</p></div></li>
+        <li><span class="num">3</span><div><h3>Molecular Profiling</h3><p>Biochemical and molecular data acquisition</p></div></li>
+        <li><span class="num">4</span><div><h3>Regimen Generation</h3><p>Actionable insights, adaptative feedback</p></div></li>
+        <li><span class="num">5</span><div><h3>Platform Reporting</h3><p>Platform access for monitoring and feedback reporting</p></div></li>
+      </ol>
+      <div class="split-media framed" data-reveal style="--i:1">
+        <img src="{% static 'core/site/report.webp' %}" width="1400" height="1306" loading="lazy"
+          alt="The Omiver app showing a biomarker report with health score and per-compound ranges, beside a physician-reviewed personalized protocol" />
+      </div>
     </div>
   </div>
-</div>
+</section>
 
-<div class="page-section our-service-box">
-  <p class="section-title">Value-based Results</p>
-  <h1 class="section-description">One-stop Solution for a Healthier You</h1>
-  <p class="section-subtext">Our service includes a novel at-home test encompassing 100+ biomarkers related to diet and
-    exercise activities, as well as access to our recommendation platform that continuously adapts to user feedback and
-    up-to-date literature.</p>
-  <div class="tiles">
-    <div class="tile">
-      <div class="tile-header green">
+<section class="section section-canvas" aria-labelledby="results-heading">
+  <div class="wrap">
+    <div class="section-head center" data-reveal>
+      <h2 id="results-heading">Value-based Results</h2>
+      <p class="lede">One-stop Solution for a Healthier You. Our service includes a novel at-home test encompassing 100+
+        biomarkers related to diet and exercise activities, as well as access to our recommendation platform that
+        continuously adapts to user feedback and up-to-date literature.</p>
+    </div>
+    <div class="plans">
+      <article class="plan featured" data-reveal>
         <h3>Platform Membership</h3>
-      </div>
-      <div class="tile-content">
-        <p class="tile-description-primary">Plan includes</p>
-        <p class="tile-description-secondary"><img src="{% static 'core/index/round-check.svg' %}" />Localized
-          profiles access</p>
-        <p class="tile-description-secondary"><img src="{% static 'core/index/round-check.svg' %}" />Predictive
-          dietary and fitness regimens</p>
-        <p class="tile-description-secondary"><img src="{% static 'core/index/round-check.svg' %}" />Kit tracking and
-          ordering</p>
-      </div>
-    </div>
-    <div class="tile">
-      <div class="tile-header red">
+        <p class="includes">Plan includes</p>
+        <ul>
+          <li>{% include 'core/icon.html' with name='check' %}Localized profiles access</li>
+          <li>{% include 'core/icon.html' with name='check' %}Predictive dietary and fitness regimens</li>
+          <li>{% include 'core/icon.html' with name='check' %}Kit tracking and ordering</li>
+        </ul>
+      </article>
+      <article class="plan" data-reveal style="--i:1">
         <h3>Wellness Overview Test Kit</h3>
-      </div>
-      <div class="tile-content">
-        <p class="tile-description-primary">Plan includes</p>
-        <p class="tile-description-secondary"><img src="{% static 'core/index/round-check.svg' %}" />Covers 100+
-          molecules related to nutrition, fitness, and performance</p>
-        <p class="tile-description-secondary"><img src="{% static 'core/index/round-check.svg' %}" />Annual,
-          quarterly, and monthly bundles</p>
-        <p class="tile-description-secondary"><img src="{% static 'core/index/round-check.svg' %}" />Discounted
-          pricing for higher volumes</p>
-      </div>
+        <p class="includes">Plan includes</p>
+        <ul>
+          <li>{% include 'core/icon.html' with name='check' %}Covers 100+ molecules related to nutrition, fitness, and performance</li>
+          <li>{% include 'core/icon.html' with name='check' %}Annual, quarterly, and monthly bundles</li>
+          <li>{% include 'core/icon.html' with name='check' %}Discounted pricing for higher volumes</li>
+        </ul>
+      </article>
+    </div>
+    <div class="after-grid">
+      <a class="btn btn-secondary" href="#contact">Contact for Pricing Info {% include 'core/icon.html' with name='arrow' %}</a>
     </div>
   </div>
-  <a class="contact-us-link" href="#contact-form-response">Contact for Pricing Info
-    <img src="{% static 'core/information/diagonal_icon.svg' %}" /></a>
-</div>
+</section>
 
-<div class="page-section our-test-kit-box">
-  <p class="section-title">Precise Coverage for Your Goals</p>
-  <h1 class="section-description">Profiling of molecules specifically related to nutrition, fitness, and performance
-  </h1>
-  <div class="mobile-slider">
-    <div class="main-infographic slider-wrapper">
-      <span class="left-column slider-item">
-        <div class="checkmark-item">
-          <h2>Amino Acids</h2>
-          <img class="checkmark-icon" src="{% static 'core/information/checkmark.svg' %}" />
-        </div>
-        <div class="checkmark-item">
-          <h2>Nucleotides</h2>
-          <img class="checkmark-icon" src="{% static 'core/information/checkmark.svg' %}" />
-        </div>
-        <div class="checkmark-item">
-          <h2>Lipids</h2>
-          <img class="checkmark-icon" src="{% static 'core/information/checkmark.svg' %}" />
-        </div>
-        <div class="checkmark-item">
-          <h2>Carnitines</h2>
-          <img class="checkmark-icon" src="{% static 'core/information/checkmark.svg' %}" />
-        </div>
-        <div class="checkmark-item">
-          <h2>Organic Acids</h2>
-          <img class="checkmark-icon" src="{% static 'core/information/checkmark.svg' %}" />
-        </div>
-      </span>
-      <span class="right-column slider-item">
-        <div class="checkmark-item">
-          <h2>Carbohydrates</h2>
-          <img class="checkmark-icon" src="{% static 'core/information/checkmark.svg' %}" />
-        </div>
-        <div class="checkmark-item">
-          <h2>Fatty Acids</h2>
-          <img class="checkmark-icon" src="{% static 'core/information/checkmark.svg' %}" />
-        </div>
-        <div class="checkmark-item">
-          <h2>Flavonoids</h2>
-          <img class="checkmark-icon" src="{% static 'core/information/checkmark.svg' %}" />
-        </div>
-        <div class="checkmark-item">
-          <h2>Carotenoids</h2>
-          <img class="checkmark-icon" src="{% static 'core/information/checkmark.svg' %}" />
-        </div>
-      </span>
+<section class="section" aria-labelledby="coverage-heading">
+  <div class="wrap">
+    <div class="section-head center" data-reveal>
+      <h2 id="coverage-heading">Precise Coverage for Your Goals</h2>
+      <p class="lede">Profiling of molecules specifically related to nutrition, fitness, and performance</p>
     </div>
-
-    <div class="slider-buttons">
-      <button class="prev-btn">‹</button>
-      <button class="next-btn">›</button>
+    <ul class="molecules" data-reveal>
+      <li>{% include 'core/icon.html' with name='check-circle' %}Amino Acids</li>
+      <li>{% include 'core/icon.html' with name='check-circle' %}Nucleotides</li>
+      <li>{% include 'core/icon.html' with name='check-circle' %}Lipids</li>
+      <li>{% include 'core/icon.html' with name='check-circle' %}Carnitines</li>
+      <li>{% include 'core/icon.html' with name='check-circle' %}Organic Acids</li>
+      <li>{% include 'core/icon.html' with name='check-circle' %}Carbohydrates</li>
+      <li>{% include 'core/icon.html' with name='check-circle' %}Fatty Acids</li>
+      <li>{% include 'core/icon.html' with name='check-circle' %}Flavonoids</li>
+      <li>{% include 'core/icon.html' with name='check-circle' %}Carotenoids</li>
+    </ul>
+    <div class="after-grid">
+      <a class="btn btn-secondary" href="#contact">Reach out for Details {% include 'core/icon.html' with name='arrow' %}</a>
     </div>
   </div>
-  <a class="contact-us-link" href="#contact-form-response">Reach out for Details
-    <img src="{% static 'core/information/diagonal_icon.svg' %}" /></a>
-</div>
+</section>
 
-<div class="page-section our-platform-box">
-  <p class="section-title">Accessible, Data-Driven, Customized Wellness</p>
-  <h1 class="section-description">Our platform makes your wellness guidance dynamic and intuitive</h1>
-  <p class="our-platform-subtext">Omiver is available via the web and the Apple App Store. Our integration of molecular
-    data provides a more comprehensive and dynamic understanding of specific health management needs. Because evidence-
-    based nutrition should evolve with the person in front of you.</p>
-  <a class="contact-us-link" href="/login">Get Started <img src="{% static 'core/information/diagonal_icon.svg' %}" />
-  </a>
-  <img src="{% static 'core/information/three_device_screenshot.png' %}" />
-</div>
-
-<div class="page-section contact-us-block main-infographic">
-  <form class="left-column" hx-post="{% url 'send-email' %}" hx-target="#contact-form-response" hx-swap="innerHTML">
-    {% csrf_token %}
-    <span>
-      <label class="contact-me-input">
-        <h4>Full name</h4>
-        <input name="name" placeholder="write..." />
-      </label>
-      <label class="contact-me-input">
-        <h4>Email</h4>
-        <input name="email" placeholder="write..." />
-      </label>
-    </span>
-    <span>
-      <label class="contact-me-input">
-        <h4>Message</h4>
-        <textarea name="message" placeholder="write..."></textarea>
-        <button type="submit" class="submit-button">
-          Submit
-          <img src="{% static 'core/information/diagonal_icon.svg' %}" />
-        </button>
-      </label>
-    </span>
-  </form>
-  <div class="right-column">
-    <div class="point-info-box">
-      <div class="info-icon">
-        <div class="icon-border-div">
-          <img src="{% static 'core/information/message_icon.svg' %}" />
-        </div>
-      </div>
-      <span>
-        <h3>Email</h3>
-        <h4><a href="mailto:info@omiver.me">info@omiver.me</a></h4>
-      </span>
-    </div>
-    <div class="point-info-box">
-      <div class="info-icon">
-        <div class="icon-border-div">
-          <img src="{% static 'core/information/linkedin_icon.svg' %}" />
-        </div>
-      </div>
-      <span>
-        <h3>LinkedIn</h3>
-        <h4><a href="https://www.linkedin.com/company/omiver" target="_blank"
-            rel="noopener noreferrer">https://www.linkedin.com/company/omiver</a></h4>
-      </span>
-    </div>
-    <div class="point-info-box">
-      <div class="info-icon">
-        <div class="icon-border-div">
-          <img src="{% static 'core/information/instagram_icon.svg' %}" />
-        </div>
-      </div>
-      <span>
-        <h3>Instagram</h3>
-        <h4><a href="https://www.instagram.com/omiverwellness" target="_blank"
-            rel="noopener noreferrer">@omiverwellness</a>
-        </h4>
-      </span>
+<section aria-labelledby="platform-heading">
+  <div class="wrap">
+    <div class="platform" data-reveal>
+      <h2 id="platform-heading">Accessible, Data-Driven, Customized Wellness</h2>
+      <p class="lede">Our platform makes your wellness guidance dynamic and intuitive</p>
+      <p class="body">Omiver is available via the web and the Apple App Store. Our integration of molecular data provides
+        a more comprehensive and dynamic understanding of specific health management needs. Because evidence-based
+        nutrition should evolve with the person in front of you.</p>
+      <a class="btn btn-light" href="/app/register">Get Started {% include 'core/icon.html' with name='arrow' %}</a>
+      <img src="{% static 'core/site/devices.webp' %}" width="2200" height="1016" loading="lazy"
+        alt="The Omiver app on three phones: a personalized protocol, a client dashboard, and a provider's patient list" />
     </div>
   </div>
-</div>
-<div id="contact-form-response"></div>
+</section>
+
+{% include 'core/contact.html' %}
 {% endblock %}

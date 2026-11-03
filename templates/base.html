@@ -2,8 +2,9 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.6/dist/htmx.min.js"></script>
-    <link href="https://fonts.googleapis.com/css?family=Open Sans" rel="stylesheet" />
+    {% block base_fonts %}<link href="https://fonts.googleapis.com/css?family=Open Sans" rel="stylesheet" />{% endblock %}
     <link rel="stylesheet" href="{% static 'style.css' %}" />
     <title>{% block title %}Omiver{% endblock %}</title>
     {% block styles %} {% endblock %}

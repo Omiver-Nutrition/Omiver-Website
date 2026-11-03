@@ -6,6 +6,30 @@ Implements the Mifflin-St Jeor formula and standardized macronutrient distributi
 from typing import Dict, Any, Tuple, Optional
 
 
+# Omiver stores and displays height in inches and weight in pounds. The formulas
+# below are metric, so callers convert stored values with these helpers first.
+CM_PER_INCH = 2.54
+KG_PER_POUND = 0.45359237
+
+
+def inches_to_cm(inches: Optional[float]) -> Optional[float]:
+    """Stored height (inches) -> centimetres. Returns None when missing or invalid."""
+    try:
+        value = float(inches)
+    except (TypeError, ValueError):
+        return None
+    return value * CM_PER_INCH if value > 0 else None
+
+
+def pounds_to_kg(pounds: Optional[float]) -> Optional[float]:
+    """Stored weight (pounds) -> kilograms. Returns None when missing or invalid."""
+    try:
+        value = float(pounds)
+    except (TypeError, ValueError):
+        return None
+    return value * KG_PER_POUND if value > 0 else None
+
+
 def calculate_bmr_and_tdee(
     weight_kg: Optional[float],
     height_cm: Optional[float],

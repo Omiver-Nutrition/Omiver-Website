@@ -3,157 +3,98 @@
 
 {% block title %}Omiver - Home{% endblock %}
 
-{% block inner_styles %}
-{% comment %}
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet"
-  integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
-  integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
-{% endcomment %}
-<link rel="stylesheet" href="{% static 'core/index/style.css' %}" />
-{% endblock %}
-
 {% block inner_content %}
-<main class="page-main">
-  <div class="page-section hero-box">
-    <h1 class="hero-header">Redefining what personalized wellness can achieve<br>for every body</h1>
-    <p class="hero-subtitle">At Omiver, we translate measurable physiological data into diet and fitness regimens that
-      adapt alongside real biological change</p>
-    <a class="hero-cta" href="#contact-form-response">Contact us to Learn More<img
-        src="{% static 'core/information/diagonal_icon.svg' %}" /></a>
-  </div>
-  <div class="page-section what-box green">
-    <div class="main-infographic">
-      <div class="left-column">
-        <p class="what-box-title">No Guesswork, No Generic Plans</p>
-        <h1 class="section-header">Omiver makes wellness affordable, smart, and personalized to you</h1>
-        <p class="what-box-paragraph">Our end-to-end service combines molecular analysis with machine learning to
-          deliver wellness plans built just for you. We integrate physiological data into diet and fitness regimens
-          that evolve with your biological feedback, changing guesswork into guided adjustments.</p>
-        <p class="what-box-paragraph"><img src="{% static 'core/index/checkmark-white.svg' %}" />At-home blood testing
-          for convenience</p>
-        <p class="what-box-paragraph"><img src="{% static 'core/index/checkmark-white.svg' %}" />100+ molecular marker
-          panel for comprehensive biological insights</p>
-        <p class="what-box-paragraph"><img src="{% static 'core/index/checkmark-white.svg' %}" />Customized diet and
-          fitness plans catered to specific performance and health goals</p>
-      </div>
-      <div class="right-column">
-        <img src="{% static 'core/index/omiver_box.png' %}" />
+<section class="hero" aria-labelledby="hero-heading">
+  <div class="wrap">
+    <div>
+      <h1 id="hero-heading">Redefining what personalized wellness can achieve for every body</h1>
+      <p class="lede">At Omiver, we translate measurable physiological data into diet and fitness regimens that
+        adapt alongside real biological change</p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="/app/register">Create Account {% include 'core/icon.html' with name='arrow' %}</a>
+        <a class="btn btn-secondary" href="#contact">Contact us to Learn More</a>
       </div>
     </div>
-  </div>
-  <div class="page-section our-process-box">
-    <div class="main-infographic">
-      <div class="right-column">
-        <img src="{% static 'core/index/platform.svg' %}" />
-      </div>
-      <div class="left-column">
-        <p class="section-title">Continuous Learning for Reactive Recommendations</p>
-        <h1 class="section-header">Evidence-based guidance that evolves with your biology</h1>
-        <p class="section-paragraph">Implementing regular molecular testing allows us to more closely monitor
-          physiological state, providing more accurate insights into how your body is actually changing with your
-          habits. <br><br> Our platform then continuously incorporates the latest scientific literature and your
-          feedback to refine our recommendations and increase predictive accuracy. Our recommendations acan encompass a
-          variety of dietary practices and exercise plans so you can stick to your preferences.
-        </p>
-        <p class="section-paragraph">Want to see what we can do?</p>
-        <a href="/demo">Contact to Try our Demo<img src="{% static 'core/information/diagonal_icon.svg' %}" /></a>
-      </div>
+    <div class="hero-media">
+      <img src="{% static 'core/site/omiver-box.webp' %}" width="1080" height="1080" fetchpriority="high"
+        alt="Hands holding the sage-green Omiver at-home test kit box" />
     </div>
   </div>
+</section>
 
-  <div class="why-omiver-box page-section">
-    <p class="why-omiver-title">Why Omiver</p>
-    <h1 class="section-description">Redefine personalized wellness management</h1>
-    <div class="tiles">
-      <div class="tile white">
-        <img src="{% static 'core/index/checkmark-outline.svg' %}" />
-        <p>Regimens based on up-to-date scientific literature</p>
+<section class="benefits-row" aria-label="What Omiver includes">
+  <div class="wrap">
+    <ul class="benefits" role="list">
+      <li class="benefit" data-reveal style="--i:0">
+        <span class="tick">{% include 'core/icon.html' with name='check' %}</span>
+        <p>At-home blood testing for convenience</p>
+      </li>
+      <li class="benefit" data-reveal style="--i:1">
+        <span class="tick">{% include 'core/icon.html' with name='check' %}</span>
+        <p>100+ molecular marker panel for comprehensive biological insights</p>
+      </li>
+      <li class="benefit" data-reveal style="--i:2">
+        <span class="tick">{% include 'core/icon.html' with name='check' %}</span>
+        <p>Customized diet and fitness plans catered to specific performance and health goals</p>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<section class="section" aria-labelledby="what-heading">
+  <div class="wrap">
+    <div class="section-head" data-reveal>
+      <h2 id="what-heading">No Guesswork, No Generic Plans</h2>
+      <p class="lede">Omiver makes wellness affordable, smart, and personalized to you. Our end-to-end service combines
+        molecular analysis with machine learning to deliver wellness plans built just for you. We integrate
+        physiological data into diet and fitness regimens that evolve with your biological feedback, changing
+        guesswork into guided adjustments.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section section-canvas" aria-labelledby="process-heading">
+  <div class="wrap">
+    <div class="split reverse media-wide">
+      <div class="split-copy" data-reveal>
+        <h2 id="process-heading">Continuous Learning for Reactive Recommendations</h2>
+        <p class="lede">Evidence-based guidance that evolves with your biology</p>
+        <div class="body">
+          <p>Implementing regular molecular testing allows us to more closely monitor physiological state, providing
+            more accurate insights into how your body is actually changing with your habits.</p>
+          <p>Our platform then continuously incorporates the latest scientific literature and your feedback to refine
+            our recommendations and increase predictive accuracy. Our recommendations can encompass a variety of
+            dietary practices and exercise plans so you can stick to your preferences.</p>
+        </div>
+        <div class="cta-row">
+          <p>Want to see what we can do?</p>
+          <a class="text-link" href="/demo">Contact to Try our Demo {% include 'core/icon.html' with name='arrow' %}</a>
+        </div>
       </div>
-      <div class="tile white">
-        <img src="{% static 'core/index/checkmark-outline.svg' %}" />
-        <p>Adaptive model for continuous learning</p>
-      </div>
-      <div class="tile white">
-        <img src="{% static 'core/index/checkmark-outline.svg' %}" />
-        <p>Extensive performance-focused biomarker panel</p>
-      </div>
-      <div class="tile white">
-        <img src="{% static 'core/index/checkmark-outline.svg' %}" />
-        <p>Create and share custom recipes and exercise regimens</p>
-      </div>
-      <div class="tile white">
-        <img src="{% static 'core/index/checkmark-outline.svg' %}" />
-        <p>Live-chat support for assistance and feedback</p>
-      </div>
-      <div class="tile white">
-        <img src="{% static 'core/index/checkmark-outline.svg' %}" />
-        <p>View & manage client diet, exercise, and wellness metrics</p>
+      <div class="split-media framed" data-reveal style="--i:1">
+        <img src="{% static 'core/site/platform.webp' %}" width="1556" height="1358" loading="lazy"
+          alt="The Omiver app on two phones: a client dashboard with health score and reports, and a provider's patient list" />
       </div>
     </div>
   </div>
-  <div id="contact-form-response"></div>
-  <div class="page-section contact-us-block main-infographic">
-    <form class="left-column" hx-post="{% url 'send-email' %}" hx-target="#contact-form-response" hx-swap="innerHTML">
-      {% csrf_token %}
-      <span>
-        <label class="contact-me-input">
-          <h4>Full name</h4>
-          <input name="name" placeholder="write..." />
-        </label>
-        <label class="contact-me-input">
-          <h4>Email</h4>
-          <input name="email" placeholder="write..." />
-        </label>
-      </span>
-      <span>
-        <label class="contact-me-input">
-          <h4>Message</h4>
-          <textarea name="message" placeholder="write..."></textarea>
-          <button type="submit" class="submit-button">
-            Submit
-            <img src="{% static 'core/information/diagonal_icon.svg' %}" />
-          </button>
-        </label>
-      </span>
-    </form>
-    <div class="right-column">
-      <div class="point-info-box">
-        <div class="info-icon">
-          <div class="icon-border-div">
-            <img src="{% static 'core/information/message_icon.svg' %}" />
-          </div>
-        </div>
-        <span>
-          <h3>Email</h3>
-          <h4><a href="mailto:info@omiver.me">info@omiver.me</a></h4>
-        </span>
-      </div>
-      <div class="point-info-box">
-        <div class="info-icon">
-          <div class="icon-border-div">
-            <img src="{% static 'core/information/linkedin_icon.svg' %}" />
-          </div>
-        </div>
-        <span>
-          <h3>LinkedIn</h3>
-          <h4><a href="https://www.linkedin.com/company/omiver" target="_blank"
-              rel="noopener noreferrer">https://www.linkedin.com/company/omiver</a></h4>
-        </span>
-      </div>
-      <div class="point-info-box">
-        <div class="info-icon">
-          <div class="icon-border-div">
-            <img src="{% static 'core/information/instagram_icon.svg' %}" />
-          </div>
-        </div>
-        <span>
-          <h3>Instagram</h3>
-          <h4><a href="https://www.instagram.com/omiverwellness" target="_blank"
-              rel="noopener noreferrer">@omiverwellness</a></h4>
-        </span>
-      </div>
+</section>
+
+<section class="section" aria-labelledby="why-heading">
+  <div class="wrap">
+    <div class="section-head" data-reveal>
+      <h2 id="why-heading">Why Omiver</h2>
+      <p class="lede">Redefine personalized wellness management</p>
     </div>
+    <ul class="checklist" data-reveal>
+      <li>{% include 'core/icon.html' with name='check-circle' %}Regimens based on up-to-date scientific literature</li>
+      <li>{% include 'core/icon.html' with name='check-circle' %}Adaptive model for continuous learning</li>
+      <li>{% include 'core/icon.html' with name='check-circle' %}Extensive performance-focused biomarker panel</li>
+      <li>{% include 'core/icon.html' with name='check-circle' %}Create and share custom recipes and exercise regimens</li>
+      <li>{% include 'core/icon.html' with name='check-circle' %}Live-chat support for assistance and feedback</li>
+      <li>{% include 'core/icon.html' with name='check-circle' %}View &amp; manage client diet, exercise, and wellness metrics</li>
+    </ul>
   </div>
-</main>
+</section>
+
+{% include 'core/contact.html' %}
 {% endblock %}

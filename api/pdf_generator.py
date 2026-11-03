@@ -487,8 +487,22 @@ def generate_recommendation_pdf(recommendation) -> bytes:
         except Exception:
             age_str = str(dob_val)
 
-    weight_str = f"{client.weight} kg" if getattr(client, "weight", None) else "—"
-    height_str = f"{client.height} cm" if getattr(client, "height", None) else "—"
+    # Height and weight are stored in inches and pounds.
+    weight_str = "—"
+    height_str = "—"
+    try:
+        weight_val = float(getattr(client, "weight", None) or 0)
+        if weight_val > 0:
+            weight_str = f"{weight_val:g} lbs"
+    except (TypeError, ValueError):
+        pass
+    try:
+        height_val = float(getattr(client, "height", None) or 0)
+        if height_val > 0:
+            feet, inches = divmod(round(height_val), 12)
+            height_str = f"{feet} ft {inches} in"
+    except (TypeError, ValueError):
+        pass
 
     profile_items = [
         ("Patient Name", patient_name),

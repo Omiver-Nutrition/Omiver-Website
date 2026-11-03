@@ -1,0 +1,211 @@
+[
+  {
+    "model": "core.kitbarcodeassignment",
+    "pk": 12,
+    "fields": {
+      "client": 19,
+      "test_kit": 1,
+      "barcode_number": "21191288",
+      "created_at": "2026-08-04T10:19:34Z",
+      "updated_at": "2026-08-04T10:19:34Z"
+    }
+  },
+  {
+    "model": "core.kitbarcodeassignment",
+    "pk": 7,
+    "fields": {
+      "client": 19,
+      "test_kit": 1,
+      "barcode_number": "21191295",
+      "created_at": "2026-08-04T10:19:34Z",
+      "updated_at": "2026-08-04T10:19:34Z"
+    }
+  },
+  {
+    "model": "core.kitbarcodeassignment",
+    "pk": 18,
+    "fields": {
+      "client": 19,
+      "test_kit": 1,
+      "barcode_number": "21191297",
+      "created_at": "2026-08-04T10:19:34Z",
+      "updated_at": "2026-08-04T10:19:34Z"
+    }
+  },
+  {
+    "model": "core.kitbarcodeassignment",
+    "pk": 1,
+    "fields": {
+      "client": null,
+      "test_kit": 1,
+      "barcode_number": "21191290",
+      "created_at": "2026-08-04T10:19:34Z",
+      "updated_at": "2026-08-04T10:19:34Z"
+    }
+  },
+  {
+    "model": "core.kitbarcodeassignment",
+    "pk": 6,
+    "fields": {
+      "client": 18,
+      "test_kit": 1,
+      "barcode_number": "21191296",
+      "created_at": "2026-08-04T10:19:34Z",
+      "updated_at": "2026-08-04T10:19:34Z"
+    }
+  },
+  {
+    "model": "core.kitbarcodeassignment",
+    "pk": 30,
+    "fields": {
+      "client": 5,
+      "test_kit": 1,
+      "barcode_number": "21191202",
+      "created_at": "2026-08-04T10:19:34Z",
+      "updated_at": "2026-08-04T10:19:34Z"
+    }
+  },
+  {
+    "model": "core.kitbarcodeassignment",
+    "pk": 27,
+    "fields": {
+      "client": 5,
+      "test_kit": 1,
+      "barcode_number": "21191207",
+      "created_at": "2026-08-04T10:19:34Z",
+      "updated_at": "2026-08-04T10:19:34Z"
+    }
+  },
+  {
+    "model": "core.kitbarcodeassignment",
+    "pk": 13,
+    "fields": {
+      "client": 13,
+      "test_kit": 1,
+      "barcode_number": "21191289",
+      "created_at": "2026-08-04T10:19:34Z",
+      "updated_at": "2026-08-04T10:19:34Z"
+    }
+  },
+  {
+    "model": "core.kitbarcodeassignment",
+    "pk": 8,
+    "fields": {
+      "client": 13,
+      "test_kit": 1,
+      "barcode_number": "21191299",
+      "created_at": "2026-08-04T10:19:34Z",
+      "updated_at": "2026-08-04T10:19:34Z"
+    }
+  },
+  {
+    "model": "core.kitbarcodeassignment",
+    "pk": 24,
+    "fields": {
+      "client": 10,
+      "test_kit": 1,
+      "barcode_number": "21191200",
+      "created_at": "2026-08-04T10:19:34Z",
+      "updated_at": "2026-08-04T10:19:34Z"
+    }
+  },
+  {
+    "model": "core.kitbarcodeassignment",
+    "pk": 25,
+    "fields": {
+      "client": 10,
+      "test_kit": 1,
+      "barcode_number": "21191204",
+      "created_at": "2026-08-04T10:19:34Z",
+      "updated_at": "2026-08-04T10:19:34Z"
+    }
+  },
+  {
+    "model": "core.kitbarcodeassignment",
+    "pk": 21,
+    "fields": {
+      "client": 20,
+      "test_kit": 1,
+      "barcode_number": "21191205",
+      "created_at": "2026-08-04T10:19:34Z",
+      "updated_at": "2026-08-04T10:19:34Z"
+    }
+  },
+  {
+    "model": "core.kitbarcodeassignment",
+    "pk": 20,
+    "fields": {
+      "client": 20,
+      "test_kit": 1,
+      "barcode_number": "21191209",
+      "created_at": "2026-08-04T10:19:34Z",
+      "updated_at": "2026-08-04T10:19:34Z"
+    }
+  },
+  {
+    "model": "core.kitbarcodeassignment",
+    "pk": 22,
+    "fields": {
+      "client": 12,
+      "test_kit": 1,
+      "barcode_number": "21191201",
+      "created_at": "2026-08-04T10:19:34Z",
+      "updated_at": "2026-08-04T10:19:34Z"
+    }
+  },
+  {
+    "model": "core.kitbarcodeassignment",
+    "pk": 23,
+    "fields": {
+      "client": 12,
+      "test_kit": 1,
+      "barcode_number": "21191206",
+      "created_at": "2026-08-04T10:19:34Z",
+      "updated_at": "2026-08-04T10:19:34Z"
+    }
+  },
+  {
+    "model": "core.kitbarcodeassignment",
+    "pk": 19,
+    "fields": {
+      "client": 7,
+      "test_kit": 1,
+      "barcode_number": "21191208",
+      "created_at": "2026-08-04T10:19:34Z",
+      "updated_at": "2026-08-04T10:19:34Z"
+    }
+  },
+  {
+    "model": "core.kitbarcodeassignment",
+    "pk": 17,
+    "fields": {
+      "client": 4,
+      "test_kit": 1,
+      "barcode_number": "21191286",
+      "created_at": "2026-08-04T10:19:34Z",
+      "updated_at": "2026-08-04T10:19:34Z"
+    }
+  },
+  {
+    "model": "core.kitbarcodeassignment",
+    "pk": 14,
+    "fields": {
+      "client": 4,
+      "test_kit": 1,
+      "barcode_number": "21191291",
+      "created_at": "2026-08-04T10:19:34Z",
+      "updated_at": "2026-08-04T10:19:34Z"
+    }
+  },
+  {
+    "model": "core.kitbarcodeassignment",
+    "pk": 31,
+    "fields": {
+      "client": 3,
+      "test_kit": 1,
+      "barcode_number": "99999999",
+      "created_at": "2026-08-04T10:19:34Z",
+      "updated_at": "2026-08-04T10:19:34Z"
+    }
+  }
+]

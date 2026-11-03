@@ -8,115 +8,12 @@
 {% endblock %}
 
 {% block inner_content %}
-<style>
-  .legal-page-wrapper {
-    padding: 24px 0 40px;
-  }
-
-  .legal-container {
-    max-width: 1180px;
-  }
-
-  .legal-layout {
-    grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
-    gap: 32px;
-  }
-
-  .legal-sidebar,
-  .legal-content-card,
-  .legal-header-section {
-    width: 100%;
-    max-width: 100%;
-    box-sizing: border-box;
-  }
-
-  .legal-content-card {
-    min-width: 0;
-    overflow-wrap: anywhere;
-  }
-
-  .legal-content-card p,
-  .legal-content-card li,
-  .legal-content-card a {
-    overflow-wrap: anywhere;
-    word-break: normal;
-  }
-
-  .legal-content-card h2,
-  .legal-content-card h3,
-  .legal-sidebar h4,
-  .legal-toc li a {
-    overflow-wrap: anywhere;
-  }
-
-  @media (max-width: 1024px) {
-    .legal-layout {
-      grid-template-columns: 1fr;
-    }
-
-    .legal-sidebar {
-      position: static;
-      order: 2;
-    }
-
-    .legal-content-card {
-      order: 1;
-      padding: 28px;
-    }
-  }
-
-  @media (max-width: 640px) {
-    .legal-page-wrapper {
-      padding: 16px 0 24px;
-    }
-
-    .legal-container {
-      padding: 0 12px;
-    }
-
-    .legal-header-section {
-      padding: 28px 16px;
-      border-radius: 16px;
-      margin-bottom: 20px;
-    }
-
-    .legal-title {
-      font-size: 30px;
-      line-height: 1.15;
-    }
-
-    .legal-content-card {
-      padding: 20px 16px;
-      border-radius: 16px;
-    }
-
-    .legal-section {
-      margin-bottom: 28px;
-    }
-
-    .legal-section h2 {
-      font-size: 18px;
-    }
-
-    .legal-section p,
-    .legal-toc li a {
-      font-size: 14px;
-    }
-
-    .legal-sidebar {
-      padding: 18px 16px;
-      border-radius: 16px;
-      margin-top: 14px;
-    }
-  }
-</style>
 <div class="legal-page-wrapper">
   <div class="legal-container">
     <div data-custom-class="body">
       <header class="legal-header-section">
-        <div class="legal-badge">Omiver, LLC</div>
         <h1 class="legal-title" data-custom-class="title">Privacy Policy</h1>
-        <div class="legal-subtitle" data-custom-class="subtitle">Last updated: March 18, 2026</div>
+        <div class="legal-subtitle" data-custom-class="subtitle">Omiver, LLC · Last updated: March 18, 2026</div>
       </header>
 
       <section class="legal-section" style="margin-bottom: 28px;">

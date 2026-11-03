@@ -83,8 +83,8 @@
           <option value="Mixed/Multiple Ethnicities">Mixed/Multiple Ethnicities</option>
           <option value="Other">Other</option>
         </select>
-        <input type="number" id="height" placeholder="Height (cm)" />
-        <input type="number" id="weight" placeholder="Weight (kg)" />
+        <input type="number" id="height" placeholder="Height (in)" />
+        <input type="number" id="weight" placeholder="Weight (lb)" />
       </span>
       <div class="actions">
         <button class="action-button" id="step3-back">Go Back</button>
@@ -224,7 +224,7 @@
           sex: sex,
           ethnicity: ethnicity,
           allergies: allergies,
-          sport: `${height ? height + 'cm' : ''} ${weight ? weight + 'kg' : ''}`,
+          sport: `${height ? height + ' in' : ''} ${weight ? weight + ' lb' : ''}`,
           fitness_goal: fitness_goal,
           nutritional_goal: `${dietary_pref}${nutrition_goal ? '\n' + nutrition_goal : ''}`
         }

@@ -1,0 +1,48 @@
+{% load static %}
+<section class="section" id="contact" aria-labelledby="contact-heading">
+  <div class="wrap">
+    <h2 id="contact-heading" class="contact-title" data-reveal>Contact us to Learn More</h2>
+    <div class="contact" data-reveal>
+      <form class="contact-form" id="contact-form-{{ form_id|default:'main' }}" hx-post="{% url 'send-email' %}"
+        hx-target="#contact-form-response" hx-swap="innerHTML" hx-disabled-elt="find button">
+        {% csrf_token %}
+        <div class="row">
+          <div class="field">
+            <label for="contact-name">Full name</label>
+            <input id="contact-name" name="name" placeholder="write..." autocomplete="name" required />
+          </div>
+          <div class="field">
+            <label for="contact-email">Email</label>
+            <input id="contact-email" name="email" type="email" placeholder="write..." autocomplete="email" required />
+          </div>
+        </div>
+        <div class="field">
+          <label for="contact-message">Message</label>
+          <textarea id="contact-message" name="message" placeholder="write..." required></textarea>
+        </div>
+        <div id="contact-form-response" class="form-status" role="status" aria-live="polite" data-form="contact-form-{{ form_id|default:'main' }}"></div>
+        <button type="submit" class="btn btn-primary">Submit {% include 'core/icon.html' with name='arrow' %}</button>
+      </form>
+      <ul class="contact-list">
+        <li>
+          <a href="mailto:info@omiver.me">
+            <span class="badge">{% include 'core/icon.html' with name='mail' %}</span>
+            <div><h3>Email</h3><span>info@omiver.me</span></div>
+          </a>
+        </li>
+        <li>
+          <a href="https://www.linkedin.com/company/omiver" target="_blank" rel="noopener noreferrer">
+            <span class="badge">{% include 'core/icon.html' with name='linkedin' %}</span>
+            <div><h3>LinkedIn</h3><span>https://www.linkedin.com/company/omiver</span></div>
+          </a>
+        </li>
+        <li>
+          <a href="https://www.instagram.com/omiverwellness" target="_blank" rel="noopener noreferrer">
+            <span class="badge">{% include 'core/icon.html' with name='instagram' %}</span>
+            <div><h3>Instagram</h3><span>@omiverwellness</span></div>
+          </a>
+        </li>
+      </ul>
+    </div>
+  </div>
+</section>

@@ -1,7 +1,8 @@
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from django.http import HttpResponse
-from django.core.mail import send_mail
+from django.core.mail import EmailMessage
 
 import os
 
@@ -10,6 +11,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 @api_view(['POST'])
+# The public contact form is used by anonymous visitors; the project-wide
+# IsAuthenticated default rejected every one of them with a 401. The default
+# anonymous rate throttle still applies.
+@permission_classes([AllowAny])
 def send_email(request):
     data = request.data
     
@@ -22,14 +27,19 @@ def send_email(request):
                                     <p>Information is missing! Please try again.</p>
                                 </div>''')
 
+    # Newlines in a header value are rejected by Django; flatten the name so a
+    # stray line break in the form field cannot fail the whole send.
+    subject_name = " ".join(str(name).split())
+
     try:
-        send_mail(
-            f"Website: Inquiry from {name}",
-            f"Email: {email}\nmessage",
-            os.getenv("SENDER_EMAIL"),
-            [os.getenv("RECEIVER_EMAIL", "omivernutrition@gmail.com")],
-            fail_silently=False
-        )
+        EmailMessage(
+            subject=f"Website: Inquiry from {subject_name}",
+            body=f"Name: {name}\nEmail: {email}\n\nMessage:\n{message}",
+            from_email=os.getenv("SENDER_EMAIL"),
+            to=[os.getenv("RECEIVER_EMAIL", "omivernutrition@gmail.com")],
+            # Replying to the notification goes straight to the visitor.
+            reply_to=[email],
+        ).send(fail_silently=False)
         return HttpResponse(''' <div class="form-response success">
                                     <p>Thank you! Your email has been sent successfully.</p>
                                 </div>''')

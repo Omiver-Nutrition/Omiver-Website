@@ -1,0 +1,530 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-03T01:25:32+00:00",
+  "title": "Design System: Omiver website",
+  "extensions": {
+    "colorMeta": {
+      "action": {
+        "role": "primary",
+        "displayName": "Deep Sage",
+        "canonical": "oklch(50.0% 0.061 159.8)",
+        "tonalRamp": [
+          "#020f07",
+          "#142b1f",
+          "#2b4a39",
+          "#446b56",
+          "#658d77",
+          "#8dae9b",
+          "#b5d1c1",
+          "#e0f5e8"
+        ]
+      },
+      "action-hover": {
+        "role": "primary",
+        "displayName": "Deep Sage Hover",
+        "canonical": "oklch(45.3% 0.058 156.6)",
+        "tonalRamp": [
+          "#030e07",
+          "#162a1e",
+          "#2e4938",
+          "#486b55",
+          "#688c75",
+          "#8fae9a",
+          "#b7d0c0",
+          "#e1f4e7"
+        ]
+      },
+      "action-press": {
+        "role": "primary",
+        "displayName": "Deep Sage Press",
+        "canonical": "oklch(40.0% 0.050 157.2)",
+        "tonalRamp": [
+          "#040e07",
+          "#182a1f",
+          "#31483a",
+          "#4b6957",
+          "#6c8b77",
+          "#92ad9c",
+          "#bacfc1",
+          "#e3f3e8"
+        ]
+      },
+      "sage": {
+        "role": "secondary",
+        "displayName": "Brand Sage",
+        "canonical": "oklch(63.9% 0.068 159.2)",
+        "tonalRamp": [
+          "#010f07",
+          "#112b1e",
+          "#284b38",
+          "#406c54",
+          "#618e75",
+          "#89b099",
+          "#b3d2bf",
+          "#def5e7"
+        ]
+      },
+      "sage-soft": {
+        "role": "secondary",
+        "displayName": "Sage Wash",
+        "canonical": "oklch(63.9% 0.068 159.2)",
+        "tonalRamp": [
+          "#010f07",
+          "#112b1e",
+          "#284b38",
+          "#406c54",
+          "#618e75",
+          "#89b099",
+          "#b3d2bf",
+          "#def5e7"
+        ],
+        "note": "Alpha tint; ramp derived from its opaque base hue."
+      },
+      "ring": {
+        "role": "secondary",
+        "displayName": "Focus Sage",
+        "canonical": "oklch(50.0% 0.061 159.8)",
+        "tonalRamp": [
+          "#020f07",
+          "#142b1f",
+          "#2b4a39",
+          "#446b56",
+          "#658d77",
+          "#8dae9b",
+          "#b5d1c1",
+          "#e0f5e8"
+        ],
+        "note": "Alpha tint; ramp derived from its opaque base hue."
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(20.1% 0.022 251.8)",
+        "tonalRamp": [
+          "#080b0f",
+          "#20262b",
+          "#3c434b",
+          "#59626d",
+          "#7a838e",
+          "#9ea6af",
+          "#c3cad2",
+          "#eaeff5"
+        ]
+      },
+      "ink-2": {
+        "role": "neutral",
+        "displayName": "Slate",
+        "canonical": "oklch(45.5% 0.021 248.3)",
+        "tonalRamp": [
+          "#080c0f",
+          "#20262b",
+          "#3c434a",
+          "#59626c",
+          "#7a848e",
+          "#9ea6af",
+          "#c3cad1",
+          "#eaeff5"
+        ]
+      },
+      "ink-3": {
+        "role": "neutral",
+        "displayName": "Muted Slate",
+        "canonical": "oklch(50.5% 0.017 244.9)",
+        "tonalRamp": [
+          "#090c0e",
+          "#21262a",
+          "#3c4349",
+          "#5a626a",
+          "#7b848b",
+          "#9fa6ad",
+          "#c4cad0",
+          "#eaeff3"
+        ]
+      },
+      "bg": {
+        "role": "neutral",
+        "displayName": "White",
+        "canonical": "oklch(100.0% 0.000 89.9)",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Mist Canvas",
+        "canonical": "oklch(97.7% 0.002 165.1)",
+        "tonalRamp": [
+          "#0a0b0b",
+          "#242525",
+          "#414242",
+          "#606261",
+          "#818382",
+          "#a4a5a4",
+          "#c8cac9",
+          "#edefee"
+        ]
+      },
+      "panel": {
+        "role": "neutral",
+        "displayName": "Pale Sage Panel",
+        "canonical": "oklch(96.0% 0.007 160.1)",
+        "tonalRamp": [
+          "#0a0c0b",
+          "#232624",
+          "#404341",
+          "#5e6260",
+          "#7f8381",
+          "#a2a6a4",
+          "#c7cac8",
+          "#edefee"
+        ]
+      },
+      "panel-strong": {
+        "role": "neutral",
+        "displayName": "Deeper Panel",
+        "canonical": "oklch(93.2% 0.012 157.0)",
+        "tonalRamp": [
+          "#090c0a",
+          "#222624",
+          "#3e4440",
+          "#5c635f",
+          "#7d8480",
+          "#a0a7a3",
+          "#c5cbc7",
+          "#ebf0ed"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "oklch(20.1% 0.022 251.8)",
+        "tonalRamp": [
+          "#080b0f",
+          "#20262b",
+          "#3c434b",
+          "#59626d",
+          "#7a838e",
+          "#9ea6af",
+          "#c3cad2",
+          "#eaeff5"
+        ],
+        "note": "Alpha tint; ramp derived from its opaque base hue."
+      },
+      "line-strong": {
+        "role": "neutral",
+        "displayName": "Strong Hairline",
+        "canonical": "oklch(20.1% 0.022 251.8)",
+        "tonalRamp": [
+          "#080b0f",
+          "#20262b",
+          "#3c434b",
+          "#59626d",
+          "#7a838e",
+          "#9ea6af",
+          "#c3cad2",
+          "#eaeff5"
+        ],
+        "note": "Alpha tint; ramp derived from its opaque base hue."
+      },
+      "featured-tick": {
+        "role": "feedback",
+        "displayName": "Featured Tick",
+        "canonical": "oklch(89.7% 0.028 157.3)",
+        "tonalRamp": [
+          "#070d09",
+          "#1e2822",
+          "#39463e",
+          "#56665c",
+          "#76877c",
+          "#9ba9a0",
+          "#c1cdc5",
+          "#e8f1eb"
+        ]
+      },
+      "success-ink": {
+        "role": "feedback",
+        "displayName": "Success Ink",
+        "canonical": "oklch(37.0% 0.065 159.0)",
+        "tonalRamp": [
+          "#020f07",
+          "#122b1e",
+          "#294a38",
+          "#426c55",
+          "#638e75",
+          "#8baf9a",
+          "#b4d1c0",
+          "#dff5e7"
+        ]
+      },
+      "error-ink": {
+        "role": "feedback",
+        "displayName": "Error Ink",
+        "canonical": "oklch(44.4% 0.147 28.3)",
+        "tonalRamp": [
+          "#200000",
+          "#470c09",
+          "#72231d",
+          "#a03b32",
+          "#c65e52",
+          "#e3897d",
+          "#feb3a8",
+          "#ffded6"
+        ]
+      },
+      "error-soft": {
+        "role": "feedback",
+        "displayName": "Error Wash",
+        "canonical": "oklch(44.4% 0.147 28.3)",
+        "tonalRamp": [
+          "#200000",
+          "#470c09",
+          "#72231d",
+          "#a03b32",
+          "#c65e52",
+          "#e3897d",
+          "#feb3a8",
+          "#ffded6"
+        ],
+        "note": "Alpha tint; ramp derived from its opaque base hue."
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Hero H1 only, capped at ~15ch."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Section H2s, contact title, platform band, legal page titles."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Journey steps, plan names, legal section headings, TLDR cards; portal page titles use --fs-h3."
+      },
+      "lede": {
+        "displayName": "Lede",
+        "purpose": "Short intros under headings in ink-2, 46-62ch. Public pages only."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Running copy, measure 60-72ch. Portal body steps down to 15px (label size, weight 400)."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Form labels and list headings, sentence case."
+      },
+      "micro": {
+        "displayName": "Micro",
+        "purpose": "Footer disclaimer; portal column headers and metadata at weight 600."
+      }
+    },
+    "shadows": [
+      {
+        "name": "media-lift",
+        "value": "0 1px 2px rgba(15, 23, 32, 0.05), 0 12px 32px rgba(15, 23, 32, 0.07)",
+        "purpose": "Hero photograph and screenshots inside framed panels."
+      },
+      {
+        "name": "menu-drop",
+        "value": "0 16px 32px rgba(15, 23, 32, 0.08)",
+        "purpose": "Mobile navigation sheet; migrated portal modals over a rgba(15, 23, 32, 0.4) scrim."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "All transitions and the reveal."
+      },
+      {
+        "name": "control",
+        "value": "160ms",
+        "purpose": "Button, link and input state changes."
+      },
+      {
+        "name": "journey-hover",
+        "value": "200ms",
+        "purpose": "Journey row wash and disc fill."
+      },
+      {
+        "name": "reveal",
+        "value": "700ms, 18px rise from 4px blur, 70ms stagger",
+        "purpose": "Opt-in section reveal on public pages; disabled under reduced motion and absent in the portal."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "600px"
+      },
+      {
+        "name": "plans",
+        "value": "760px"
+      },
+      {
+        "name": "main",
+        "value": "860px"
+      },
+      {
+        "name": "legal",
+        "value": "900px"
+      },
+      {
+        "name": "checklist",
+        "value": "960px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Every filled action, on Deep Sage with white text.",
+      "html": "<button class=\"ds-btn-primary\">Order your kit <svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M7 17 17 7M8 7h9v9\"/></svg></button>",
+      "css": ".ds-btn-primary{display:inline-flex;align-items:center;gap:8px;height:52px;padding:0 26px;border-radius:999px;font-family:var(--font, Figtree, system-ui, -apple-system, 'Segoe UI', sans-serif);font-size:1rem;font-weight:600;cursor:pointer;transition:background-color 160ms var(--ease-out, cubic-bezier(0.16,1,0.3,1)),border-color 160ms var(--ease-out, cubic-bezier(0.16,1,0.3,1)),transform 160ms var(--ease-out, cubic-bezier(0.16,1,0.3,1));background:var(--action, #436e57);color:#fff;border:none;} .ds-btn-primary svg{transition:transform 160ms var(--ease-out, cubic-bezier(0.16,1,0.3,1));} .ds-btn-primary:hover{background:var(--action-hover, #3a6049);} .ds-btn-primary:hover svg{transform:translate(2px,-2px);} .ds-btn-primary:active{background:var(--action-press, #30503d);transform:translateY(1px);} .ds-btn-primary:focus-visible{outline:3px solid var(--ring, rgba(67,110,87,0.45));outline-offset:2px;}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Alternative action beside a primary; 1.5px sage outline.",
+      "html": "<button class=\"ds-btn-secondary\">See how it works</button>",
+      "css": ".ds-btn-secondary{display:inline-flex;align-items:center;gap:8px;height:52px;padding:0 26px;border-radius:999px;font-family:var(--font, Figtree, system-ui, -apple-system, 'Segoe UI', sans-serif);font-size:1rem;font-weight:600;cursor:pointer;transition:background-color 160ms var(--ease-out, cubic-bezier(0.16,1,0.3,1)),border-color 160ms var(--ease-out, cubic-bezier(0.16,1,0.3,1)),transform 160ms var(--ease-out, cubic-bezier(0.16,1,0.3,1));background:transparent;color:var(--action, #436e57);border:1.5px solid rgba(67,110,87,0.45);} .ds-btn-secondary:hover{background:var(--sage-soft, rgba(103,153,125,0.14));border-color:var(--action, #436e57);} .ds-btn-secondary:focus-visible{outline:3px solid var(--ring, rgba(67,110,87,0.45));outline-offset:2px;}"
+    },
+    {
+      "name": "Light Button",
+      "kind": "button",
+      "refersTo": "button-light",
+      "description": "White button used only on the Deep Sage platform band.",
+      "html": "<div class=\"ds-band\"><button class=\"ds-btn-light\">Open the app</button></div>",
+      "css": ".ds-band{background:var(--action, #436e57);padding:24px;border-radius:24px;} .ds-btn-light{display:inline-flex;align-items:center;gap:8px;height:52px;padding:0 26px;border-radius:999px;font-family:var(--font, Figtree, system-ui, -apple-system, 'Segoe UI', sans-serif);font-size:1rem;font-weight:600;cursor:pointer;transition:background-color 160ms var(--ease-out, cubic-bezier(0.16,1,0.3,1)),border-color 160ms var(--ease-out, cubic-bezier(0.16,1,0.3,1)),transform 160ms var(--ease-out, cubic-bezier(0.16,1,0.3,1));background:#fff;color:var(--action, #436e57);border:none;} .ds-btn-light:hover{background:var(--panel, #eef3f0);} .ds-btn-light:focus-visible{outline:3px solid rgba(255,255,255,0.7);outline-offset:2px;}"
+    },
+    {
+      "name": "Input Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Label above, white field, Deep Sage border and ring on focus.",
+      "html": "<label class=\"ds-field\"><span>Email</span><input type=\"email\" placeholder=\"you@example.com\"></label>",
+      "css": ".ds-field{display:grid;gap:6px;font-family:var(--font, Figtree, system-ui, -apple-system, 'Segoe UI', sans-serif);max-width:320px;} .ds-field span{font-size:0.9375rem;font-weight:600;color:var(--ink, #0f1720);} .ds-field input{font:inherit;font-size:1rem;line-height:1.5;padding:13px 14px;border-radius:10px;border:1px solid var(--line-strong, rgba(15,23,32,0.18));background:#fff;color:var(--ink, #0f1720);transition:border-color 160ms var(--ease-out, cubic-bezier(0.16,1,0.3,1)),box-shadow 160ms var(--ease-out, cubic-bezier(0.16,1,0.3,1));} .ds-field input::placeholder{color:var(--ink-3, #5d666e);} .ds-field input:hover{border-color:rgba(15,23,32,0.32);} .ds-field input:focus-visible{outline:none;border-color:var(--action, #436e57);box-shadow:0 0 0 3px var(--ring, rgba(67,110,87,0.45));}"
+    },
+    {
+      "name": "Site Header",
+      "kind": "nav",
+      "refersTo": "site-header",
+      "description": "Translucent sticky bar: wordmark left, links right, small primary button last.",
+      "html": "<nav class=\"ds-nav\"><span class=\"ds-mark\">OMIVER</span><div><a href=\"#\" aria-current=\"page\">How it works</a><a href=\"#\">Information</a><a class=\"ds-nav-btn\" href=\"#\">Get started</a></div></nav>",
+      "css": ".ds-nav{display:flex;align-items:center;justify-content:space-between;height:76px;padding:0 24px;background:rgba(255,255,255,0.82);backdrop-filter:saturate(1.4) blur(14px);border-bottom:1px solid var(--line, rgba(15,23,32,0.1));font-family:var(--font, Figtree, system-ui, -apple-system, 'Segoe UI', sans-serif);} .ds-mark{font-weight:700;letter-spacing:0.02em;color:var(--action, #436e57);} .ds-nav div{display:flex;align-items:center;gap:28px;} .ds-nav a{color:var(--ink, #0f1720);font-weight:500;text-decoration:none;} .ds-nav a:hover,.ds-nav a[aria-current]{color:var(--action, #436e57);} .ds-nav a:focus-visible{outline:3px solid var(--ring, rgba(67,110,87,0.45));outline-offset:2px;border-radius:6px;} .ds-nav .ds-nav-btn{height:42px;padding:0 18px;display:inline-flex;align-items:center;border-radius:999px;background:var(--action, #436e57);color:#fff;font-weight:600;} .ds-nav .ds-nav-btn:hover{background:var(--action-hover, #3a6049);color:#fff;}"
+    },
+    {
+      "name": "Molecule Chip",
+      "kind": "chip",
+      "refersTo": "molecule-chip",
+      "description": "Static white pill naming a measured molecule class.",
+      "html": "<span class=\"ds-chip\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"m8.5 12.5 2.5 2.5 4.5-5\"/></svg>Amino acids</span>",
+      "css": ".ds-chip{display:inline-flex;align-items:center;gap:10px;padding:14px 22px 14px 16px;border-radius:999px;background:#fff;border:1px solid var(--line, rgba(15,23,32,0.1));font-family:var(--font, Figtree, system-ui, -apple-system, 'Segoe UI', sans-serif);font-size:1.125rem;font-weight:600;color:var(--ink, #0f1720);} .ds-chip svg{color:var(--action, #436e57);}"
+    },
+    {
+      "name": "Benefit Panel",
+      "kind": "card",
+      "refersTo": "benefit-panel",
+      "description": "Pale Sage 24px panel with a Deep Sage tick disc above a benefit statement.",
+      "html": "<div class=\"ds-benefit\"><span class=\"ds-tick\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m5 12.5 4.5 4.5L19 7.5\"/></svg></span><p>Test at home in minutes, with no clinic visit.</p></div>",
+      "css": ".ds-benefit{background:var(--panel, #eef3f0);border-radius:24px;padding:26px 28px 28px;max-width:320px;font-family:var(--font, Figtree, system-ui, -apple-system, 'Segoe UI', sans-serif);} .ds-tick{display:grid;place-items:center;width:36px;height:36px;border-radius:999px;background:var(--action, #436e57);color:#fff;margin-bottom:18px;} .ds-benefit p{margin:0;font-size:1.25rem;font-weight:550;line-height:1.3;letter-spacing:-0.015em;color:var(--ink, #0f1720);}"
+    },
+    {
+      "name": "Featured Plan Card",
+      "kind": "card",
+      "refersTo": "plan-card-featured",
+      "description": "The filled Deep Sage plan card; the plain variant is white with a hairline.",
+      "html": "<div class=\"ds-plan\"><h3>Performance</h3><p class=\"ds-plan-label\">Plan includes</p><ul><li><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m5 12.5 4.5 4.5L19 7.5\"/></svg>100+ marker panel</li><li><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m5 12.5 4.5 4.5L19 7.5\"/></svg>Adaptive meal plan</li></ul></div>",
+      "css": ".ds-plan{background:var(--action, #436e57);color:#fff;border-radius:24px;padding:32px;max-width:340px;font-family:var(--font, Figtree, system-ui, -apple-system, 'Segoe UI', sans-serif);} .ds-plan h3{margin:0 0 16px;font-size:1.625rem;font-weight:650;letter-spacing:-0.02em;} .ds-plan-label{margin:0 0 10px;font-size:0.9375rem;font-weight:600;} .ds-plan ul{list-style:none;margin:0;padding:0;display:grid;gap:10px;} .ds-plan li{display:flex;gap:10px;align-items:center;} .ds-plan svg{color:var(--featured-tick, #cfe3d6);}"
+    },
+    {
+      "name": "Journey Step",
+      "kind": "custom",
+      "refersTo": "journey-step-number",
+      "description": "Signature numbered row; hover washes Pale Sage and fills the disc.",
+      "html": "<div class=\"ds-step\" tabindex=\"0\"><span class=\"ds-num\">2</span><div><h4>Collect your sample</h4><p>A guided finger-prick takes about five minutes.</p></div></div>",
+      "css": ".ds-step{display:flex;gap:18px;padding:16px;border-radius:16px;font-family:var(--font, Figtree, system-ui, -apple-system, 'Segoe UI', sans-serif);transition:background-color 200ms var(--ease-out, cubic-bezier(0.16,1,0.3,1));max-width:440px;} .ds-num{flex:none;display:grid;place-items:center;width:44px;height:44px;border-radius:999px;background:var(--sage-soft, rgba(103,153,125,0.14));color:var(--action, #436e57);font-weight:650;font-variant-numeric:tabular-nums;transition:background-color 200ms var(--ease-out, cubic-bezier(0.16,1,0.3,1)),color 200ms var(--ease-out, cubic-bezier(0.16,1,0.3,1));} .ds-step h4{margin:0 0 4px;font-size:1.1875rem;font-weight:650;letter-spacing:-0.01em;color:var(--ink, #0f1720);} .ds-step p{margin:0;color:var(--ink-2, #4e5862);} .ds-step:hover,.ds-step:focus-within,.ds-step:focus-visible{background:var(--panel, #eef3f0);outline:none;} .ds-step:hover .ds-num,.ds-step:focus-visible .ds-num{background:var(--action, #436e57);color:#fff;}"
+    },
+    {
+      "name": "Portal Table (target)",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Provisional migration target for the legacy clients table: hairlines, sentence-case 13px headers, 44px rows.",
+      "html": "<div class=\"ds-table\"><table><thead><tr><th>Client</th><th>Kit status</th><th>Last test</th></tr></thead><tbody><tr><td>Client A</td><td><span class=\"ds-status\">Testing</span></td><td>12 Oct 2026</td></tr><tr><td>Client B</td><td><span class=\"ds-status\">Finished</span></td><td>3 Sep 2026</td></tr></tbody></table></div>",
+      "css": ".ds-table{border:1px solid var(--line, rgba(15,23,32,0.1));border-radius:16px;overflow:hidden;font-family:var(--font, Figtree, system-ui, -apple-system, 'Segoe UI', sans-serif);max-width:520px;} .ds-table table{width:100%;border-collapse:collapse;font-size:0.9375rem;color:var(--ink, #0f1720);} .ds-table th{text-align:left;font-size:0.8125rem;font-weight:600;color:var(--ink-2, #4e5862);background:var(--canvas, #f6f8f7);padding:12px 16px;border-bottom:1px solid var(--line, rgba(15,23,32,0.1));} .ds-table td{height:44px;padding:0 16px;border-bottom:1px solid var(--line, rgba(15,23,32,0.1));font-variant-numeric:tabular-nums;} .ds-table tr:last-child td{border-bottom:none;} .ds-table tbody tr:hover{background:var(--canvas, #f6f8f7);} .ds-status{display:inline-block;padding:3px 10px;border-radius:10px;background:var(--sage-soft, rgba(103,153,125,0.14));color:var(--success-ink, #1c4a33);font-size:0.8125rem;font-weight:600;}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Clear Clinic",
+    "overview": "A calm, well-lit consulting room for your own biology: a white, faintly green-tinted canvas, one confident sans, and a single deep sage colour that means \"act here\". The world is the category standard for at-home health testing, done carefully. It earns trust through restraint, real product photography and real product screenshots, not through decoration.\n\nDensity is low and the rhythm is generous: sections breathe on a fluid 72–128px vertical step, copy sits in narrow measures, and content groups into soft rounded pale-sage panels or open lists divided by thin hairlines. Motion is quiet: a short fade-up reveal on scroll, small hover shifts, nothing that loops.\n\nDepth comes mostly from tone (white → canvas → panel), with one soft ambient shadow reserved for photography and screenshots.\n\n**In the portal.** The provider portal is an Operate surface: providers scan client rosters, intake profiles, plans and tickets. When a portal screen moves onto Clear Clinic it keeps the same face, palette, focus ring and shapes, but tightens the rhythm. Tables and lists come before panels, hairlines come before boxes, and there are no reveal animations. The brand shows up in precise details, not in big hero bands. Until a screen is migrated, its legacy styling is debt to remove, not a pattern to extend.",
+    "keyCharacteristics": [
+      "Near-white canvas with a green cast; ink text, never pure black.",
+      "Deep sage (`action`) is the only filled-control colour; mid sage is for tints only.",
+      "One family, Figtree variable, self-hosted, with tight negative tracking on headings.",
+      "Soft geometry: 24px panels, 16px inner frames, full-pill controls and chips.",
+      "Real assets only: kit photograph, report and platform screenshots."
+    ],
+    "rules": [
+      {
+        "name": "The Deep Sage Rule",
+        "body": "Any control with white text sits on `action` (or darker). Mid `sage` behind white text is 3.27:1 and is never used as a fill.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Action Colour Rule",
+        "body": "Sage is the only hue on the page besides neutrals and the photography. Don't introduce a second accent for emphasis; use weight, size or a filled sage panel instead. Status colour is the only exception: error red in form messages and the amber alert icon (#7d4e06) in legal callouts.",
+        "section": "colors"
+      },
+      {
+        "name": "The Retired Mauve Rule",
+        "body": "Mauve (#a8879d) is legacy. Login, register, demo and portal CTAs move to Deep Sage (`action`). White on mauve is about 3.2:1, and it was never part of the system.",
+        "section": "colors"
+      },
+      {
+        "name": "The Negative Tracking Rule",
+        "body": "Tracking tightens as size grows: −0.035em display, −0.028em headline, −0.01 to −0.02em titles, 0 for body. Headings use `text-wrap: balance`, paragraphs `pretty`.",
+        "section": "typography"
+      },
+      {
+        "name": "The Sentence Case Rule",
+        "body": "No uppercase labels or letter-spaced small caps; hierarchy comes from size and weight.",
+        "section": "typography"
+      },
+      {
+        "name": "The Shadows Lift Pictures Rule",
+        "body": "Shadows belong to images and the floating mobile menu. Panels, cards, buttons and chips stay flat and separate by tone or hairline.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do put every filled control on Deep Sage (`action`) with white text, darkening to `action-hover` / `action-press` on hover and active.",
+      "Do separate chapters with white / Mist Canvas bands and the fluid section step (`clamp(72px, 9vw, 128px)`) rather than rules or boxes.",
+      "Do group related items in 24px Pale Sage panels, or as hairline-divided lists.",
+      "Do use real Omiver photography and screenshots, rounded (24px hero, 16px inside frames) with the Media lift shadow.",
+      "Do keep headings in Figtree 650 with negative tracking, and keep ledes in `ink-2` at 46–62ch.",
+      "Do give every interactive element the 3px `ring` focus outline, and keep reveal motion opt-in and disabled under reduced motion.",
+      "Do build new or refactored portal, demo and auth screens on the `:root` tokens in `core/static/core/site.css` and Figtree, at the portal scale and density.",
+      "Do use the legacy palette table to map old values when you touch a legacy screen, and migrate the whole screen, not one component."
+    ],
+    "donts": [
+      "Don't use mid `sage` as a fill behind white text (3.27:1).",
+      "Don't add a second accent hue for emphasis; outside status messages and the legal alert icon, the page is neutrals, sage and photography.",
+      "Don't put shadows on panels, cards, buttons or chips; depth comes from tone and hairlines.",
+      "Don't use uppercase, letter-spaced labels or small eyebrow text above headings.",
+      "Don't use stock or illustrated imagery in place of real product assets.",
+      "Don't use pure black text or a second typeface.",
+      "Don't copy any legacy portal value (Open Sans, mauve, Tailwind blue, browns, gradients, ad hoc shadows, 15px radii) into new work.",
+      "Don't colour-code plan tiers or record types with extra hues; label them."
+    ]
+  }
+}

@@ -1,20 +1,28 @@
 {% load static %}
-<footer>
-  <p class="disclaimer">Omiver is a wellness technology company. Our test kits and recommendations are intended
-    exclusively for wellness purposes. We are not a laboratory service or medical provider, and all biomarker measuring
-    and analysis are provided by independent third parties. Omiver cannot diagnose you with any disease or condition,
-    and any and all information provided by Omiver is not medical advice and is not intended to replace the advice of
-    your medical professional. You should always seek the advice of your physician or other healthcare providers with
-    any questions you may have regarding diagnosis, cure, treatment, mitigation, or prevention of any disease or other
-    medical condition or impairment or the status of your health. </p>
-
-  <div class="options">
-    <p>Omiver Nutrition© Copyright 2025</p>
-    <img src="{% static '/r.svg' %}" />
-    <span>
-      <a href="/privacy">Privacy Policy</a>
-      <p>|</p>
-      <a href="/terms">Terms of Service</a>
-    </span>
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="top">
+      <a href="/" aria-label="Omiver home"><img src="{% static 'green_logo.svg' %}" alt="Omiver" width="243" height="33" /></a>
+      <nav aria-label="Footer">
+        <a href="/information">How Omiver Works</a>
+        <a href="/demo">Demo</a>
+        <a href="/app/login">Login</a>
+        <a href="/app/register">Create Account</a>
+      </nav>
+    </div>
+    <p class="disclaimer">Omiver is a wellness technology company. Our test kits and recommendations are intended
+      exclusively for wellness purposes. We are not a laboratory service or medical provider, and all biomarker measuring
+      and analysis are provided by independent third parties. Omiver cannot diagnose you with any disease or condition,
+      and any and all information provided by Omiver is not medical advice and is not intended to replace the advice of
+      your medical professional. You should always seek the advice of your physician or other healthcare providers with
+      any questions you may have regarding diagnosis, cure, treatment, mitigation, or prevention of any disease or other
+      medical condition or impairment or the status of your health.</p>
+    <div class="bottom">
+      <p>Omiver Nutrition© Copyright 2025</p>
+      <div class="legal-links">
+        <a href="/privacy">Privacy Policy</a>
+        <a href="/terms">Terms of Service</a>
+      </div>
+    </div>
   </div>
 </footer>
